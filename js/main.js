@@ -20,7 +20,7 @@ class RunnerScene extends Phaser.Scene {
     super('runner');
     this.accumulator=0;this.views=new Map();this.lastState='';
     this.aliveViews=new Set();this.maskSegments=[];this.particleColors=new Map();
-    this.backgroundWidths=C.PANELS.map(([, ,w,h])=>w*720/h);
+    this.backgroundWidths=C.PANELS.map(([,,w,h])=>w*720/h);
   }
   preload(){
     for(const [key,url] of Object.entries(PATHS))this.load.image(key,url);
@@ -149,7 +149,8 @@ class RunnerScene extends Phaser.Scene {
     if(g.state==='menu')return;
     const placeBackground=(image,index,progress)=>{
       const key='world'+index,w=this.backgroundWidths[index];
-      if(image.texture.key!==key){image.setTexture(key);image.setDisplaySize(w,720);}
+      if(image.texture.key!==key)image.setTexture(key);
+      if(image.displayWidth!==w||image.displayHeight!==720)image.setDisplaySize(w,720);
       image.setPosition(-(w-1280)*progress,0);
     };
     placeBackground(this.background,g.phaseIndex,Math.min(1,g.phaseTime/30));
