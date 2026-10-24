@@ -19,6 +19,36 @@ const assert = require('node:assert/strict');
     await expectText(page, '#story-text', 'fruto roxo');
     await page.getByRole('button', { name: 'PULAR HISTÓRIA' }).waitFor({ state: 'visible' });
 
+    // Regressão visual: texto/botões podiam estar corretos enquanto a miniatura
+    // mostrava apenas um contorno quase invisível. Agora a própria história
+    // precisa provar que está desenhando o atlas hero real e colorido.
+    const previewCanvas = page.locator('#story-runner-preview canvas');
+    await previewCanvas.waitFor({ state: 'visible', timeout: 5000 });
+    await page.waitForTimeout(150);
+    const preview = await previewCanvas.evaluate(canvas => {
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      let solid = 0;
+      let orange = 0;
+      let blue = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const a = data[i + 3];
+        if (a >= 220) solid++;
+        if (a >= 180 && r >= 130 && g >= 35 && g <= 185 && b <= 105) orange++;
+        if (a >= 180 && b >= 55 && b > r * .75 && b > g * .9) blue++;
+      }
+      return { width: canvas.width, height: canvas.height, solid, orange, blue };
+    });
+    console.log('STORY_PREVIEW', JSON.stringify(preview));
+    assert.equal(preview.width, 160, 'preview da história deve usar um frame 160x160 do atlas hero');
+    assert.equal(preview.height, 160, 'preview da história deve usar um frame 160x160 do atlas hero');
+    assert.ok(preview.solid >= 350, 'preview da história precisa conter corpo sólido do Goku');
+    assert.ok(preview.orange >= 180, 'preview da história precisa mostrar o gi laranja do Goku');
+    assert.ok(preview.blue >= 35, 'preview da história precisa mostrar detalhes azuis do Goku');
+
     const panelVisibility = await page.locator('#panel').evaluate(el => getComputedStyle(el).visibility);
     assert.equal(panelVisibility, 'hidden');
 
@@ -56,7 +86,7 @@ const assert = require('node:assert/strict');
     await story.waitFor({ state: 'hidden', timeout: 5000 });
     await page.getByRole('button', { name: 'JOGAR' }).waitFor({ state: 'visible', timeout: 5000 });
 
-    console.log('PASS: história completa, pular história e não repetir após visualização.');
+    console.log('PASS: história, preview real do Goku, pular história e persistência.');
   } finally {
     await browser.close();
   }
