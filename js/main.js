@@ -61,7 +61,6 @@ class RunnerScene extends Phaser.Scene {
     this.game.events.on(Phaser.Core.Events.HIDDEN,()=>this.pauseRun());
     document.addEventListener('visibilitychange',()=>{if(document.hidden)this.pauseRun();});
     window.addEventListener('resize',()=>{if(this.isPortrait())this.pauseRun();});
-    if(Capitor?.isNativePlatform?.()){}
     if(Capacitor.isNativePlatform()){
       App.addListener('appStateChange',({isActive})=>{if(!isActive)this.pauseRun();});
       App.addListener('backButton',()=>{if(g.state==='playing')this.pauseRun();else if(g.state==='paused'){g.state='menu';g.audio.stopMusic();}else App.exitApp();});
