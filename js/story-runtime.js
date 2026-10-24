@@ -79,44 +79,50 @@ function waitForScene() {
     const probe = () => {
       const game = Phaser.GAMES.find(Boolean);
       const scene = game?.scene?.getScene?.('runner');
-      if (scene?.model) return resolve(scene);
+      if (scene?.model && scene?.textures?.exists?.('hero')) return resolve(scene);
       requestAnimationFrame(probe);
     };
     probe();
   });
 }
 
-function animateSheetPreview(node) {
-  if (!node) return () => {};
+function animateSheetPreview(node, scene) {
+  if (!node || !scene) return () => {};
 
-  const game = Phaser.GAMES.find(Boolean);
-  const scene = game?.scene?.getScene?.('runner');
-  const source = scene?.textures?.get('hero')?.getSourceImage?.();
-  if (!source) return () => {};
+  try {
+    const texture = scene.textures.get('hero');
+    const source = texture?.getSourceImage?.();
+    if (!source) throw new Error('atlas hero não disponível para a história');
 
-  let frame = 0;
-  let stopped = false;
-  const canvas = document.createElement('canvas');
-  canvas.width = 160;
-  canvas.height = 160;
-  canvas.setAttribute('aria-hidden', 'true');
-  const ctx = canvas.getContext('2d');
-  node.replaceChildren(canvas);
+    let frame = 0;
+    let stopped = false;
+    const canvas = document.createElement('canvas');
+    canvas.width = 160;
+    canvas.height = 160;
+    canvas.setAttribute('aria-hidden', 'true');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) throw new Error('canvas 2D indisponível para a prévia da história');
+    node.replaceChildren(canvas);
 
-  const render = () => {
-    if (stopped) return;
-    ctx.clearRect(0, 0, 160, 160);
-    ctx.drawImage(source, frame * 160, 0, 160, 160, 0, 0, 160, 160);
-    frame = (frame + 1) % 8;
-  };
+    const renderFrame = () => {
+      if (stopped) return;
+      ctx.clearRect(0, 0, 160, 160);
+      ctx.drawImage(source, frame * 160, 0, 160, 160, 0, 0, 160, 160);
+      frame = (frame + 1) % 8;
+    };
 
-  render();
-  const timer = setInterval(render, 1000 / 12);
-  return () => {
-    stopped = true;
-    clearInterval(timer);
+    renderFrame();
+    const timer = setInterval(renderFrame, 1000 / 12);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      node.replaceChildren();
+    };
+  } catch (error) {
+    console.error('Falha ao montar prévia do Goku na história:', error);
     node.replaceChildren();
-  };
+    return () => {};
+  }
 }
 
 function restoreMenu(panel) {
@@ -138,7 +144,7 @@ function restoreMenu(panel) {
   if (start) start.focus({ preventScroll: true });
 }
 
-function showStory() {
+function showStory(scene) {
   const overlay = $('story-overlay');
   const panel = $('panel');
   const title = $('story-title');
@@ -147,7 +153,7 @@ function showStory() {
   const next = $('story-next');
   const skip = $('story-skip');
   const progress = $('story-progress');
-  if (!overlay || !panel || !next) {
+  if (!overlay || !panel || !next || !title || !kicker || !text || !progress) {
     unlockStoryGate();
     return;
   }
@@ -155,7 +161,7 @@ function showStory() {
   panel.style.visibility = 'hidden';
   overlay.hidden = false;
   let page = 0;
-  const stopPreview = animateSheetPreview($('story-runner-preview'));
+  let stopPreview = () => {};
 
   const render = () => {
     const item = STORY[page];
@@ -182,7 +188,11 @@ function showStory() {
     finishStory();
   });
   skip?.addEventListener('click', finishStory, { once: true });
+
+  // Texto e botões nunca dependem do renderer da prévia. Mesmo que o canvas
+  // falhe, a história continua funcional e o Gate C acusa a ausência visual.
   render();
+  stopPreview = animateSheetPreview($('story-runner-preview'), scene);
 }
 
 function buildParty(scene) {
@@ -238,10 +248,11 @@ async function beginEnding(scene) {
 async function bootStoryRuntime() {
   if (qaMode) return;
   await waitForMenuReady();
-  if (hasSeenStory()) unlockStoryGate();
-  else showStory();
-
   const scene = await waitForScene();
+
+  if (hasSeenStory()) unlockStoryGate();
+  else showStory(scene);
+
   let endingStarted = false;
   const watch = () => {
     if (!endingStarted && scene.model?.state === 'victory') { endingStarted = true;beginEnding(scene).catch(console.error); }
