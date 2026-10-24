@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import '../css/story.css';
 
+const C = window.GokuCore;
 const params = new URLSearchParams(location.search);
 const qaMode = params.get('debug') === '1' || params.get('autostart') === '1';
 const $ = id => document.getElementById(id);
@@ -77,10 +78,8 @@ function waitForMenuReady() {
 function waitForScene() {
   return new Promise(resolve => {
     const probe = () => {
-      const game = Phaser.GAMES.find(Boolean);
+      const game = Phaser.GAMES?.find?.(Boolean);
       const scene = game?.scene?.getScene?.('runner');
-      // RunnerScene cria `model` somente depois de makeTextures(). Portanto,
-      // scene.model é a própria barreira de inicialização do atlas hero.
       if (scene?.model) return resolve(scene);
       requestAnimationFrame(probe);
     };
@@ -88,43 +87,70 @@ function waitForScene() {
   });
 }
 
-function animateSheetPreview(node, scene) {
-  if (!node || !scene) return () => {};
+function prepareRunSource(image) {
+  const surface = document.createElement('canvas');
+  surface.width = image.width;
+  surface.height = image.height;
+  const ctx = surface.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(image, 0, 0);
 
-  try {
-    const texture = scene.textures.get('hero');
-    const source = texture?.getSourceImage?.();
-    if (!source) throw new Error('atlas hero não disponível para a história');
+  // Mesma regra do Assets.prepareSpriteCutouts() usada pela gameplay para o
+  // atlas v8: remove apenas o matte de alpha, preservando as cores do Goku.
+  const pixels = ctx.getImageData(0, 0, surface.width, surface.height);
+  for (let i = 3; i < pixels.data.length; i += 4) {
+    pixels.data[i] = Math.max(0, Math.min(255, (pixels.data[i] - 232) * 255 / 16));
+  }
+  ctx.clearRect(0, 0, surface.width, surface.height);
+  ctx.putImageData(pixels, 0, 0);
+  return surface;
+}
 
-    let frame = 0;
-    let stopped = false;
-    const canvas = document.createElement('canvas');
-    canvas.width = 160;
-    canvas.height = 160;
-    canvas.setAttribute('aria-hidden', 'true');
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) throw new Error('canvas 2D indisponível para a prévia da história');
-    node.replaceChildren(canvas);
+function animateSheetPreview(node) {
+  if (!node || !C) return () => {};
+
+  let frame = 0;
+  let timer = null;
+  let stopped = false;
+  const canvas = document.createElement('canvas');
+  canvas.width = 160;
+  canvas.height = 160;
+  canvas.setAttribute('aria-hidden', 'true');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  node.replaceChildren(canvas);
+
+  const image = new Image();
+  image.onload = () => {
+    if (stopped) return;
+    const source = prepareRunSource(image);
 
     const renderFrame = () => {
       if (stopped) return;
+      const bounds = C.RUN_FRAMES[frame];
+      const pivot = C.RUN_PIVOTS[frame];
+      const scale = C.PLAYER_SCALE.run;
       ctx.clearRect(0, 0, 160, 160);
-      ctx.drawImage(source, frame * 160, 0, 160, 160, 0, 0, 160, 160);
+      ctx.drawImage(
+        source,
+        bounds[0], bounds[1], bounds[2], bounds[3],
+        80 + (bounds[0] - pivot[0]) * scale,
+        140 + (bounds[1] - pivot[1]) * scale,
+        bounds[2] * scale,
+        bounds[3] * scale,
+      );
       frame = (frame + 1) % 8;
     };
 
     renderFrame();
-    const timer = setInterval(renderFrame, 1000 / 12);
-    return () => {
-      stopped = true;
-      clearInterval(timer);
-      node.replaceChildren();
-    };
-  } catch (error) {
-    console.error('Falha ao montar prévia do Goku na história:', error);
+    timer = setInterval(renderFrame, 1000 / 12);
+  };
+  image.onerror = () => console.error('Falha ao carregar atlas do Goku para a história:', C.PATHS.run);
+  image.src = C.PATHS.run;
+
+  return () => {
+    stopped = true;
+    if (timer) clearInterval(timer);
     node.replaceChildren();
-    return () => {};
-  }
+  };
 }
 
 function restoreMenu(panel) {
@@ -146,7 +172,7 @@ function restoreMenu(panel) {
   if (start) start.focus({ preventScroll: true });
 }
 
-function showStory(scene) {
+function showStory() {
   const overlay = $('story-overlay');
   const panel = $('panel');
   const title = $('story-title');
@@ -191,10 +217,8 @@ function showStory(scene) {
   });
   skip?.addEventListener('click', finishStory, { once: true });
 
-  // Texto e botões nunca dependem do renderer da prévia. Mesmo que o canvas
-  // falhe, a história continua funcional e o Gate C acusa a ausência visual.
   render();
-  stopPreview = animateSheetPreview($('story-runner-preview'), scene);
+  stopPreview = animateSheetPreview($('story-runner-preview'));
 }
 
 function buildParty(scene) {
@@ -250,11 +274,12 @@ async function beginEnding(scene) {
 async function bootStoryRuntime() {
   if (qaMode) return;
   await waitForMenuReady();
-  const scene = await waitForScene();
 
   if (hasSeenStory()) unlockStoryGate();
-  else showStory(scene);
+  else showStory();
 
+  // O final pode aguardar a cena Phaser sem bloquear a introdução.
+  const scene = await waitForScene();
   let endingStarted = false;
   const watch = () => {
     if (!endingStarted && scene.model?.state === 'victory') { endingStarted = true;beginEnding(scene).catch(console.error); }
