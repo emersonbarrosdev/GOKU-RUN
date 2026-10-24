@@ -61,6 +61,7 @@ class RunnerScene extends Phaser.Scene {
     this.game.events.on(Phaser.Core.Events.HIDDEN,()=>this.pauseRun());
     document.addEventListener('visibilitychange',()=>{if(document.hidden)this.pauseRun();});
     window.addEventListener('resize',()=>{if(this.isPortrait())this.pauseRun();});
+    if(Capitor?.isNativePlatform?.()){}
     if(Capacitor.isNativePlatform()){
       App.addListener('appStateChange',({isActive})=>{if(!isActive)this.pauseRun();});
       App.addListener('backButton',()=>{if(g.state==='playing')this.pauseRun();else if(g.state==='paused'){g.state='menu';g.audio.stopMusic();}else App.exitApp();});
@@ -242,7 +243,7 @@ class RunnerScene extends Phaser.Scene {
 }
 
 const game=new Phaser.Game({type:Phaser.AUTO,parent:'game-container',width:1280,height:720,backgroundColor:'#102330',
-  render:{antialias:true,roundPixels:true,powerPreference:'high-performance'},
+  render:{antialias:true,roundPixels:false,powerPreference:'high-performance'},
   fps:{target:60,min:30,forceSetTimeOut:false,smoothStep:true},
   scale:{mode:Phaser.Scale.FIT,autoCenter:Phaser.Scale.CENTER_BOTH},
   input:{activePointers:2},audio:{disableWebAudio:false},scene:RunnerScene});
