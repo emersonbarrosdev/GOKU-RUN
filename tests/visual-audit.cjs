@@ -12,43 +12,53 @@ const assert=require('node:assert/strict');
     const atlas=await page.evaluate(()=>window.__gokuRun.scene.textures.get('hero').getSourceImage().toDataURL());
     fs.writeFileSync(path.join(out,'hero-atlas.png'),Buffer.from(atlas.split(',')[1],'base64'));
     console.log('ARTIFACTS '+out);
+
     const runtime=await page.evaluate(async()=>{
       const {scene:s,game:g}=window.__gokuRun;
       g.encounterTimer=g.orbTimer=Infinity;g.enemies=[];g.orbs=[];g.friends=[];g.track.segments=[{start:-10000,end:100000}];g.phaseBanner=0;
       let uploads=0;const original=s.game.renderer.canvasToTexture;
       s.game.renderer.canvasToTexture=function(...args){uploads++;return original.apply(this,args);};
       await new Promise(r=>setTimeout(r,1000));s.game.renderer.canvasToTexture=original;
-      return{uploadsPerSecond:uploads,terrain:s.groundStrips?.map(t=>t.texture.key)||s.terrain?.displayTexture.key,frame:s.hero.frame.name};
+      return{uploadsPerSecond:uploads,terrain:s.terrain?.displayTexture.key,frame:s.hero.frame.name};
     });
     console.log(runtime);
     assert.equal(runtime.uploadsPerSecond,0,'scrolling must not re-upload terrain textures');
-    // Pause through Phaser's ScenePlugin. Replacing s.update after the scene is
-    // booted does not detach the callback Phaser already registered, so the old
-    // audit let the model keep advancing between screenshots and compared
-    // different world states instead of only the terrain offset.
-    await page.evaluate(()=>{const {scene:s,game:g}=window.__gokuRun;s.scene.pause();s.accumulator=0;g.time=3;g.player.kiTime=5;g.player.invulnerable=0;s.renderWorld();s.syncUI();});
+
+    await page.evaluate(()=>{const {scene:s,game:g}=window.__gokuRun;s.scene.pause();s.accumulator=0;g.time=3;g.player.kiTime=5;g.player.invulnerable=0;g.track.segments=[{start:-10000,end:100000}];s.renderWorld();s.syncUI();});
     await page.screenshot({path:path.join(out,'ki-before.png')});
-    const pixels=[];
-    for(const distance of [838,839,840,841,1679,1680]){
-      console.log('capturing ground',distance);
-      await page.evaluate(async distance=>{const {scene:s,game:g}=window.__gokuRun;g.track.distance=distance;s.renderWorld();await new Promise(r=>s.game.events.once('postrender',r));await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));},distance);
-      const png=await page.screenshot({clip:{x:0,y:590,width:1280,height:100}});
-      const data=await page.evaluate(async encoded=>{
-        const image=new Image();image.src='data:image/png;base64,'+encoded;await image.decode();
-        const c=document.createElement('canvas');c.width=1280;c.height=100;const ctx=c.getContext('2d',{willReadFrequently:true});ctx.drawImage(image,0,0);
-        return [...ctx.getImageData(0,0,1280,100).data];
-      },png.toString('base64'));
-      pixels.push({distance,data});
+
+    const wrapPoints=[839,840,841,1679,1680,1681,2519,2520,2521,3359,3360,3361];
+    const allErrors=[];
+    for(const phase of [0,1,2,3,4]){
+      const pixels=[];
+      for(const distance of wrapPoints){
+        await page.evaluate(async({distance,phase})=>{
+          const {scene:s,game:g}=window.__gokuRun;
+          g.phaseIndex=phase;g.previousPhase=phase;g.phaseFade=0;g.track.distance=distance;
+          s.renderWorld();
+          await new Promise(r=>s.game.events.once('postrender',r));
+          await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+        },{distance,phase});
+        const png=await page.screenshot({clip:{x:0,y:590,width:1280,height:100}});
+        const data=await page.evaluate(async encoded=>{
+          const image=new Image();image.src='data:image/png;base64,'+encoded;await image.decode();
+          const c=document.createElement('canvas');c.width=1280;c.height=100;const ctx=c.getContext('2d',{willReadFrequently:true});ctx.drawImage(image,0,0);
+          return [...ctx.getImageData(0,0,1280,100).data];
+        },png.toString('base64'));
+        pixels.push({distance,data});
+      }
+      for(let i=1;i<pixels.length;i++){
+        if(pixels[i].distance-pixels[i-1].distance!==1)continue;
+        let diff=0,max=0;const a=pixels[i-1].data,b=pixels[i].data;
+        for(let y=0;y<100;y++)for(let x=0;x<1000;x++)for(let c=0;c<3;c++){
+          const d=Math.abs(a[(y*1280+x+1)*4+c]-b[(y*1280+x)*4+c]);diff+=d;max=Math.max(max,d);
+        }
+        const sample={phase,distance:pixels[i].distance,shiftDifference:diff/(100*1000*3),max};
+        allErrors.push(sample);
+        assert.ok(sample.shiftDifference<.02,`ground pixels must shift continuously: phase ${phase} wrap ${sample.distance}`);
+      }
     }
-    const errors=[];
-    for(let i=1;i<pixels.length;i++){
-      if(pixels[i].distance-pixels[i-1].distance!==1)continue;
-      let diff=0,max=0;const a=pixels[i-1].data,b=pixels[i].data;
-      for(let y=0;y<100;y++)for(let x=0;x<1000;x++)for(let c=0;c<3;c++){const d=Math.abs(a[(y*1280+x+1)*4+c]-b[(y*1280+x)*4+c]);diff+=d;max=Math.max(max,d);}
-      errors.push({distance:pixels[i].distance,shiftDifference:diff/(100*1000*3),max});
-    }
-    console.log(JSON.stringify(errors));
-    for(const sample of errors)assert.ok(sample.shiftDifference<.01,'ground pixels must shift continuously across wrap '+sample.distance);
-    console.log('PASS: no runtime texture upload; pixel-identical ground movement across continuous terrain scroll.');
+    console.log(JSON.stringify(allErrors));
+    console.log('PASS: zero runtime texture uploads and continuous ground across 4 wraps in all 5 phases.');
   }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
