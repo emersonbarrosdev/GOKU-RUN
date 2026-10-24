@@ -22,7 +22,11 @@ const assert=require('node:assert/strict');
     });
     console.log(runtime);
     assert.equal(runtime.uploadsPerSecond,0,'scrolling must not re-upload terrain textures');
-    await page.evaluate(()=>{const {scene:s,game:g}=window.__gokuRun;s.update=()=>{};g.time=3;g.player.kiTime=5;g.player.invulnerable=0;s.renderWorld();s.syncUI();});
+    // Pause through Phaser's ScenePlugin. Replacing s.update after the scene is
+    // booted does not detach the callback Phaser already registered, so the old
+    // audit let the model keep advancing between screenshots and compared
+    // different world states instead of only the terrain offset.
+    await page.evaluate(()=>{const {scene:s,game:g}=window.__gokuRun;s.scene.pause();s.accumulator=0;g.time=3;g.player.kiTime=5;g.player.invulnerable=0;s.renderWorld();s.syncUI();});
     await page.screenshot({path:path.join(out,'ki-before.png')});
     const pixels=[];
     for(const distance of [838,839,840,841,1679,1680]){
@@ -45,6 +49,6 @@ const assert=require('node:assert/strict');
     }
     console.log(JSON.stringify(errors));
     for(const sample of errors)assert.ok(sample.shiftDifference<.01,'ground pixels must shift continuously across wrap '+sample.distance);
-    console.log('PASS: no runtime texture upload; pixel-identical ground movement across strip recycling.');
+    console.log('PASS: no runtime texture upload; pixel-identical ground movement across continuous terrain scroll.');
   }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
