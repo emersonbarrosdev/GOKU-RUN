@@ -6,6 +6,40 @@ const qaMode = params.get('debug') === '1' || params.get('autostart') === '1';
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+let storyUnlocked = qaMode;
+
+function blockPrematureStart(event) {
+  if (storyUnlocked || qaMode) return;
+
+  if (event.type === 'click') {
+    const target = event.target instanceof Element ? event.target.closest('#start-button') : null;
+    if (!target) return;
+  } else if (event.type === 'keydown') {
+    const key = String(event.key || '').toLowerCase();
+    if (![' ', 'arrowup', 'w'].includes(key)) return;
+  } else {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+}
+
+function unlockStoryGate() {
+  if (storyUnlocked) return;
+  storyUnlocked = true;
+  document.removeEventListener('click', blockPrematureStart, true);
+  window.removeEventListener('keydown', blockPrematureStart, true);
+}
+
+if (!qaMode) {
+  // Este gate é registrado antes de main.js. Mesmo em máquina rápida ou se o
+  // jogador apertar Espaço imediatamente, a corrida não começa antes da intro.
+  document.addEventListener('click', blockPrematureStart, true);
+  window.addEventListener('keydown', blockPrematureStart, true);
+}
+
 const STORY = [
   {
     kicker: 'CAPÍTULO 1 · O FRUTO PROIBIDO',
@@ -56,8 +90,12 @@ function showStory(scene) {
   const text = $('story-text');
   const next = $('story-next');
   const progress = $('story-progress');
-  if (!overlay || !panel || !next) return;
+  if (!overlay || !panel || !next) {
+    unlockStoryGate();
+    return;
+  }
 
+  // Fluxo real: loading -> história -> menu -> jogador aperta JOGAR.
   panel.style.visibility = 'hidden';
   overlay.hidden = false;
   let page = 0;
@@ -69,7 +107,17 @@ function showStory(scene) {
     title.textContent = item.title;
     text.textContent = item.text;
     progress.textContent = `${page + 1} / ${STORY.length}`;
-    next.textContent = page === STORY.length - 1 ? 'COMEÇAR CORRIDA' : 'CONTINUAR';
+    next.textContent = page === STORY.length - 1 ? 'IR PARA O MENU' : 'CONTINUAR';
+  };
+
+  const finishStory = () => {
+    stopPreview();
+    overlay.hidden = true;
+    panel.style.visibility = '';
+    unlockStoryGate();
+    scene.syncUI?.();
+    const start = $('start-button');
+    if (start && !start.hidden) start.focus({ preventScroll: true });
   };
 
   next.addEventListener('click', () => {
@@ -78,11 +126,8 @@ function showStory(scene) {
       render();
       return;
     }
-    stopPreview();
-    overlay.hidden = true;
-    panel.style.visibility = '';
-    scene.startRun();
-  }, { once: false });
+    finishStory();
+  });
 
   render();
 }
@@ -134,7 +179,6 @@ function buildParty(scene) {
   }).setOrigin(.5);
   party.add(more);
 
-  // Bolo simples desenhado em runtime: não cria mais uma textura pesada.
   const cake = scene.add.graphics();
   cake.fillStyle(0xf5c27a).fillRoundedRect(515, 502, 215, 70, 14);
   cake.fillStyle(0xfff2db).fillRoundedRect(515, 490, 215, 32, 14);
@@ -207,7 +251,10 @@ async function beginEnding(scene) {
 async function bootStoryRuntime() {
   if (qaMode) return;
   const scene = await waitForScene();
-  while (scene.model.state !== 'menu') await sleep(30);
+
+  // Como o gate já foi registrado antes de main.js, este estado não pode ser
+  // pulado por clique ou teclado enquanto a narrativa ainda está chegando.
+  while (scene.model.state !== 'menu') await sleep(16);
   showStory(scene);
 
   let endingStarted = false;
@@ -222,4 +269,7 @@ async function bootStoryRuntime() {
   watch();
 }
 
-bootStoryRuntime().catch(console.error);
+bootStoryRuntime().catch(error => {
+  console.error(error);
+  unlockStoryGate();
+});
