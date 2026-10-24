@@ -1,0 +1,7 @@
+{
+  "appId": "com.cincomundos.gokurun",
+  "appName": "Goku Run",
+  "webDir": "dist",
+  "backgroundColor": "#081420",
+  "android": { "backgroundColor": "#081420", "allowMixedContent": false }
+}

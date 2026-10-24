@@ -1,55 +1,42 @@
-# GokuRun
-[![NPM](https://img.shields.io/npm/l/react)](https://github.com/emersonbarros87/gokuRun/blob/main/license) 
+# Goku Run — Cinco Mundos
 
-# Sobre o projeto
+Runner para PC e Android, com Phaser 3, Vite e Capacitor 8.
 
-O objetivo deste projeto foi ir além da interação de HTML, CSS e Javascript, para isso o projeto foi criado do zero tendo como base o jogo Dino do Google utilizando Photoshop e CorelDraw para criação das telas. O projeto proporcionou um melhor entendimento sobre classes, funcões, renderização, canvas, além de como juntar as peças para desenvolver o game.
+## Jogar no PC
 
-O jogo consiste em pular as magias e coletar as Zcoins, adquirindo 60 Zcoins para vencer o jogo e também podendo coletar elixir para adicionar vidas.
+Abra [ABRIR_JOGO.bat](ABRIR_JOGO.bat), ou execute `npm install` e `npm run dev`, depois acesse http://localhost:5173. Requer Node.js 22 ou superior. Não abra o HTML diretamente: a versão atual usa módulos e precisa do servidor.
 
-## Tela Inicial
-![image](https://user-images.githubusercontent.com/75150416/209837794-d3cd8891-f371-4753-bcd2-50841938778f.png)
+## Android
 
-## Tela Jogo
-![image](https://user-images.githubusercontent.com/75150416/209838016-df368a4b-4151-43f6-a741-708a9bee4d17.png)
+Transfira [releases/goku-run-debug.apk](releases/goku-run-debug.apk) para o celular e abra para instalar. Se solicitado, autorize temporariamente a instalação pelo aplicativo usado para abrir o arquivo.
 
-## Tela Game over
-![image](https://user-images.githubusercontent.com/75150416/209838369-1a4af7c0-d714-4da8-855f-4036532ac398.png)
+Android mínimo: 7.0 (API 24). Imagens, sons e bibliotecas ficam dentro do APK, sem CDN ou servidor de desenvolvimento. Orientação deitada, com pausa ao sair do aplicativo. É uma versão de teste assinada em modo debug, não uma publicação na loja.
 
-## Tela Vencedor
-![image](https://user-images.githubusercontent.com/75150416/209838491-2c328cc4-bc1a-4fef-8141-e5d33d0aa5ef.png)
+Para gerar novamente: [GERAR_APK.bat](GERAR_APK.bat) ou `npm run android:apk`. Requer JDK 21 e Android SDK com plataforma 36 e licenças aceitas. O script procura o SDK em `%LOCALAPPDATA%/Android/Sdk` ou `ANDROID_HOME`. A primeira compilação precisa de internet para dependências.
 
+Nenhum aparelho estava conectado durante a validação. Desempenho, som e retomada ainda precisam ser conferidos no celular real.
 
+## Controles e regras
 
-# Tecnologias utilizadas
-- HTML
-- CSS 
-- JavaScript
+- Celular: toque na área do jogo para pular; outro toque no ar dá pulo duplo. Botões separados para KI e pausa, sem disparar pulo junto.
+- PC: Espaço, seta para cima ou W para pular; K ativa KI; P pausa; M alterna som. Clique na área do jogo também pula.
+- Oito esferas completam o KI. Dura seis segundos e triplica pontos. Energia coletada durante o efeito fica na reserva; contato com inimigo durante KI o destrói e dá 180 pontos.
+- Aliados tiram uma vida por contato mesmo com KI: pule sobre eles.
+- Voadores e disparos aéreos permitem passar por baixo. Esferas têm alturas variadas; soldados preparam os disparos antes de chegar perto.
+- Cinco etapas de 30 segundos: Namek, floresta, cânion, cidade e vulcão, com panoramas próprios e dificuldade crescente.
 
-## Implantação em produção
-- Front end web: Netlify
+## Implementação
 
-## Front end
-Pré-requisitos: vscode
+[js/main.js](js/main.js) usa Phaser para exibição, animações, áudio e entrada, além da integração Android. [js/game.js](js/game.js) preserva o modelo determinístico com física a 120 Hz; seu renderizador Canvas anterior não é iniciado. Não foi substituída a física por Arcade Physics.
 
-```bash
-# clonar repositório
-git clone https://github.com/emersonbarros87/gokuRun.git
+Goku usa uma nova folha de quadros completos: oito de corrida e quatro de salto, com mesma escala e pivôs explícitos. Não há membros separados. O chão foi preservado, com deslocamento contínuo e máscara de buracos. Impactos usam partículas e som, sem congelar o mundo.
 
-# entrar na pasta do projeto gokuRun
-cd gokuRun
+Detalhes: [spritesheets](docs/SPRITESHEETS.md) e [validação Android](docs/VALIDATION-ANDROID.md). A qualidade artística da corrida ainda precisa de avaliação em movimento; trocar o motor não transforma automaticamente uma folha gerada em animação desenhada à mão.
 
-# instalar extensão vscode
-live server
+## Testes
 
-# executar o projeto
-index.html botão direito 'open with live server'
-```
+Execute `npm test` e `npm run build`. Com servidor aberto e `CHROME_PATH` apontando para Chrome, use `npm run test:browser` e `npm run test:mobile`. Usam perfil isolado. `TEST_URL` seleciona outra URL, inclusive produção via `npm run preview`.
 
-# Autor
+`?debug=1` expõe `window.__gokuRun` e não salva recordes da sessão de teste. `?autostart=1` pula o menu. Partidas comuns não precisam desses parâmetros.
 
-Emerson Barros
-
-https://www.linkedin.com/in/dev-emerson-barros/
-
-
+Antes de publicar: revisar direitos dos personagens/músicas, identidade visual, assinatura de produção e requisitos para apps infantis.

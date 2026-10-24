@@ -1,15 +1,32 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Goku Run</title>
-    <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#090b14">
+  <link rel="icon" href="data:,">
+  <title>Goku Run — Cinco Mundos</title>
 </head>
 <body>
-  <canvas id="canvas" width="1280" height="720"></canvas>
-  <script src="./util.js"></script>
-  <script src="./script.js"></script>
+  <main id="stage" aria-label="Goku Run">
+    <div id="game-container"></div>
+    <section id="hud" hidden aria-label="Placar">
+      <div class="score"><small>PONTOS</small><strong id="score">00000</strong></div>
+      <div class="lives" aria-label="Vidas"><span>♥</span><span>♥</span><span>♥</span></div>
+      <div class="phase"><small id="phase-label">FASE 1 / 5</small><strong id="phase-name">NAMEK</strong><div class="progress"><i id="phase-fill"></i></div></div>
+      <button id="pause-button" class="icon-button" aria-label="Pausar">Ⅱ</button>
+    </section>
+    <button id="ki-button" hidden aria-label="Ativar KI"><span id="ki-label">KI</span><span class="ki-meter"><i id="ki-fill"></i></span><small id="ki-caption">0%</small></button>
+    <div id="panel" data-mode="loading"><section class="panel-card">
+      <h1 id="panel-title">Preparando a aventura…</h1><p id="panel-subtitle">Carregando os cinco mundos</p>
+      <strong id="result-score"></strong><button id="start-button" type="button" hidden>JOGAR</button>
+      <p id="instructions">Toque na tela para pular · Toque de novo para pulo duplo</p>
+    </section><button id="sound-button" type="button" class="quiet-button">SOM LIGADO</button></div>
+    <div id="phase-banner" hidden></div>
+    <aside id="rotate-notice"><span>↻</span><strong>Vire o celular</strong><p>A aventura fica melhor com a tela deitada.</p></aside>
+  </main>
+  <footer>PC: Espaço / ↑ / W — pular · K — KI · P — pausa · M — som</footer>
+  <script type="module" src="./js/main.js"></script>
 </body>
 </html>

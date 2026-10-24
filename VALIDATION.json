@@ -1,0 +1,53 @@
+{
+  "goku_run_sheet.png": {
+    "size": [
+      2048,
+      1024
+    ],
+    "bytes": 1123048
+  },
+  "goku_jump_sheet.png": {
+    "size": [
+      2560,
+      1024
+    ],
+    "bytes": 1083075
+  },
+  "goku_misc_sheet.png": {
+    "size": [
+      2048,
+      512
+    ],
+    "bytes": 614038
+  },
+  "ground_enemy_sheet.png": {
+    "size": [
+      2048,
+      1024
+    ],
+    "bytes": 1174477
+  },
+  "air_enemy_sheet.png": {
+    "size": [
+      2048,
+      1024
+    ],
+    "bytes": 1059959
+  },
+  "environment_sheet.png": {
+    "size": [
+      2048,
+      1024
+    ],
+    "bytes": 1477380
+  },
+  "intro.mp3": {
+    "bytes": 6116554,
+    "sha256": "c7330e0da4e41c49c8c577b4365be7101379237e08ada56b72f597a5915286f2"
+  },
+  "trilha.mp3": {
+    "bytes": 3529100,
+    "sha256": "1f4051e6086e5876adc002b9f95f3f59bda4ba1186f0e06633f1c9b4a6052ae3"
+  },
+  "js_syntax": "PASS"
+}

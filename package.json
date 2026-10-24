@@ -1,0 +1,28 @@
+{
+  "name": "goku-run-cinco-mundos",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --test tests/game.test.cjs && node tests/playthrough.cjs",
+    "test:browser": "node tests/browser-review.cjs",
+    "test:mobile": "node tests/mobile-smoke.cjs",
+    "test:visual": "node tests/visual-audit.cjs",
+    "android:sync": "npm run build && cap sync android",
+    "android:open": "cap open android",
+    "android:apk": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-android.ps1"
+  },
+  "dependencies": {
+    "phaser": "3.90.0",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/android": "8.5.3",
+    "@capacitor/app": "8.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3",
+    "vite": "8.3.5",
+    "playwright-core": "1.58.2"
+  }
+}
