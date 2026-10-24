@@ -79,7 +79,9 @@ function waitForScene() {
     const probe = () => {
       const game = Phaser.GAMES.find(Boolean);
       const scene = game?.scene?.getScene?.('runner');
-      if (scene?.model && scene?.textures?.exists?.('hero')) return resolve(scene);
+      // RunnerScene cria `model` somente depois de makeTextures(). Portanto,
+      // scene.model é a própria barreira de inicialização do atlas hero.
+      if (scene?.model) return resolve(scene);
       requestAnimationFrame(probe);
     };
     probe();
