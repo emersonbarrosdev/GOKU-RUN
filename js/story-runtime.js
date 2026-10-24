@@ -86,49 +86,37 @@ function waitForScene() {
   });
 }
 
-function restorePreviewAlpha(pixels) {
-  let maxAlpha = 0;
-  for (let i = 3; i < pixels.data.length; i += 4) maxAlpha = Math.max(maxAlpha, pixels.data[i]);
-  if (!(maxAlpha > 0 && maxAlpha < 220)) return;
-
-  const cutoff = Math.max(2, maxAlpha * .06);
-  const solidAt = Math.max(cutoff + 1, maxAlpha * .28);
-  const edgeSpan = Math.max(1, solidAt - cutoff);
-  for (let i = 3; i < pixels.data.length; i += 4) {
-    const alpha = pixels.data[i];
-    if (alpha <= cutoff) pixels.data[i] = 0;
-    else if (alpha >= solidAt) pixels.data[i] = 255;
-    else pixels.data[i] = Math.min(255, (alpha - cutoff) * 255 / edgeSpan);
-  }
-}
-
 function animateSheetPreview(node) {
   if (!node) return () => {};
+
+  const game = Phaser.GAMES.find(Boolean);
+  const scene = game?.scene?.getScene?.('runner');
+  const source = scene?.textures?.get('hero')?.getSourceImage?.();
+  if (!source) return () => {};
+
   let frame = 0;
-  let timer = null;
   let stopped = false;
-  const image = new Image();
-  image.onload = () => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 160;
+  canvas.height = 160;
+  canvas.setAttribute('aria-hidden', 'true');
+  const ctx = canvas.getContext('2d');
+  node.replaceChildren(canvas);
+
+  const render = () => {
     if (stopped) return;
-    const canvas = document.createElement('canvas');
-    canvas.width = image.width;
-    canvas.height = image.height;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    ctx.drawImage(image, 0, 0);
-    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    restorePreviewAlpha(pixels);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.putImageData(pixels, 0, 0);
-    node.style.backgroundImage = `url(${canvas.toDataURL('image/png')})`;
-    timer = setInterval(() => {
-      const x = -(frame % 4) * 105;
-      const y = -Math.floor(frame / 4) * 115;
-      node.style.backgroundPosition = `${x}px ${y}px`;
-      frame = (frame + 1) % 8;
-    }, 86);
+    ctx.clearRect(0, 0, 160, 160);
+    ctx.drawImage(source, frame * 160, 0, 160, 160, 0, 0, 160, 160);
+    frame = (frame + 1) % 8;
   };
-  image.src = './assets/spritesheets/goku_run_v9.png';
-  return () => { stopped = true; if (timer) clearInterval(timer); };
+
+  render();
+  const timer = setInterval(render, 1000 / 12);
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+    node.replaceChildren();
+  };
 }
 
 function restoreMenu(panel) {
