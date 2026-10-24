@@ -3,7 +3,9 @@ import { mkdir, copyFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 const require=createRequire(import.meta.url);
-const {PATHS,SFX}=require('./js/game.js');
+// Usa a mesma configuração visual v9 dos testes para que o bundle offline
+// copie os sprites novos, e nunca volte a depender do atlas removido.
+const {PATHS,SFX}=require('./js/goku-visual-config.cjs');
 export default defineConfig({
   base:'./',publicDir:false,
   server:{port:5173,strictPort:true},
