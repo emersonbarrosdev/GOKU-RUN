@@ -48,8 +48,8 @@ class RunnerScene extends Phaser.Scene {
     // geometry every frame caused avoidable GPU uploads and visible hitches.
     this.floorMask=this.make.graphics({x:0,y:0,add:false});
     const groundMask=this.floorMask.createGeometryMask();
-    this.groundStrips=Array.from({length:3},()=>this.add.image(0,GROUND-3,'terrain-0').setOrigin(0).setMask(groundMask));
-    this.world.add(this.groundStrips);
+    this.terrain=this.add.tileSprite(0,GROUND-3,1280,164,'terrain-0').setOrigin(0).setMask(groundMask);
+    this.world.add(this.terrain);
     this.effects=this.add.graphics();this.world.add(this.effects);
     this.hero=this.add.sprite(235,GROUND,'hero',0).setOrigin(.5,140/160);this.world.add(this.hero);
     this.foreground=this.add.graphics();this.world.add(this.foreground);
@@ -155,11 +155,9 @@ class RunnerScene extends Phaser.Scene {
     };
     placeBackground(this.background,g.phaseIndex,Math.min(1,g.phaseTime/30));
     this.previous.setVisible(g.phaseFade>0);if(g.phaseFade>0){placeBackground(this.previous,g.previousPhase,1);this.previous.setAlpha(g.phaseFade);}
-    const groundOffset=g.track.distance%840;
-    this.groundStrips.forEach((strip,i)=>{
-      if(strip.texture.key!=='terrain-'+g.phaseIndex)strip.setTexture('terrain-'+g.phaseIndex);
-      strip.setPosition(i*840-groundOffset,GROUND-3);
-    });
+    const terrainKey='terrain-'+g.phaseIndex;
+    if(this.terrain.displayTexture.key!==terrainKey)this.terrain.setTexture(terrainKey);
+    this.terrain.tilePositionX=g.track.distance;
     this.syncGroundMask(g.track.segments,g.track.distance);
     this.effects.clear();this.foreground.clear();
     for(let i=0;i<g.track.segments.length-1;i++){
