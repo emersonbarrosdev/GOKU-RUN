@@ -54,6 +54,11 @@ jobs:
           cat /tmp/goku-run-preview.log
           exit 1
 
+      - name: Run story flow smoke test
+        env:
+          TEST_URL: http://127.0.0.1:4173/
+        run: npm run test:story
+
       - name: Run visual regression audit
         env:
           TEST_URL: http://127.0.0.1:4173/
