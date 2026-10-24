@@ -6,7 +6,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "node --test tests/game.test.cjs && node tests/playthrough.cjs",
+    "test": "node --test tests/game.test.cjs tests/runtime-step.test.cjs && node tests/playthrough.cjs",
     "test:browser": "node tests/browser-review.cjs",
     "test:mobile": "node tests/mobile-smoke.cjs",
     "test:visual": "node tests/visual-audit.cjs",
