@@ -51,6 +51,9 @@ Deve garantir:
 - concluir leva ao menu.
 - história vista não é obrigatória nos próximos boots.
 - `JOGAR` abre a gameplay e HUD.
+- a prévia da história usa o mesmo atlas `hero` validado na gameplay.
+- a prévia contém corpo sólido do Goku, não apenas contorno/halo.
+- a prévia contém quantidade mínima de pixels laranja do gi e azul dos detalhes.
 
 ## Gate D — Contrato visual de sprites e animação
 Comando: `npm run test:render`
@@ -58,16 +61,32 @@ Comando: `npm run test:render`
 Deve garantir no navegador real:
 - Goku não está transparente/invisível.
 - atlas do Goku contém pixels realmente opacos.
+- alpha alto sozinho NÃO é critério suficiente.
+- atlas precisa conter quantidade mínima de pixels laranja do gi e azul da roupa/botas.
+- cada um dos 8 frames de corrida precisa conter corpo completo, pixels sólidos e cores reais do personagem.
+- um sprite formado apenas por contorno, halo, sombra ou ruído deve reprovar.
+- sprite runtime está `visible=true`, `alpha=1` e usa a textura `hero` validada.
 - soldado não está transparente/invisível.
 - inimigo voador não está transparente/invisível.
 - corrida usa os oito frames corretos.
 - corrida visual é sincronizada com `Player.runTime`.
+- a cadência da corrida vem da distância/velocidade, não de um segundo relógio visual independente.
 - salto usa frames 8, 9 e 10.
 - pouso usa frame 11.
+- pivô do pé permanece estável entre os frames; não centralizar cada pose pelo bounding box.
+- corrida e pulo mantêm a mesma escala anatômica base.
 - soldado usa `runPhase` da simulação, não um relógio visual paralelo.
 - terreno usa offset pixel-alinhado.
 
-Um arquivo PNG existir NÃO é suficiente. O teste precisa validar pixels renderizados.
+Um arquivo PNG existir NÃO é suficiente. Ter alpha 255 também NÃO é suficiente. O teste precisa validar que o personagem real, colorido e completo foi renderizado.
+
+### Regressão obrigatória — sprite fantasma
+O defeito observado em 24/10/2026 mostrava somente um contorno escuro do Goku, mesmo com o teste antigo acusando pixels opacos. A partir de agora qualquer mudança de sprite deve reprovar se:
+- o corpo laranja não estiver presente;
+- os detalhes azuis não estiverem presentes;
+- a área sólida do frame for pequena demais;
+- somente bordas/contornos estiverem visíveis;
+- a intro usar um asset diferente do atlas validado na gameplay.
 
 ## Gate E — Continuidade do terreno / flicker
 Comando: `npm run test:visual`
@@ -110,9 +129,12 @@ Antes do merge de mudança visual, conferir manualmente pelo menos:
 - final da história.
 
 Checklist visual obrigatório:
-- [ ] Goku está visível.
+- [ ] Goku está visível e reconhecível como personagem completo.
+- [ ] Gi laranja, detalhes azuis, pele e cabelo aparecem corretamente.
+- [ ] A intro mostra o mesmo Goku da gameplay.
 - [ ] Goku não invade frame vizinho.
 - [ ] Corrida não treme nem troca escala.
+- [ ] Os pés não pulam verticalmente por erro de pivot entre frames.
 - [ ] Pulo não muda o tamanho anatômico do personagem.
 - [ ] Inimigos estão visíveis.
 - [ ] Projéteis correspondem aos inimigos que os geraram.

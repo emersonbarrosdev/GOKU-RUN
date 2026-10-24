@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import '../css/story.css';
 
+const C = window.GokuCore;
 const params = new URLSearchParams(location.search);
 const qaMode = params.get('debug') === '1' || params.get('autostart') === '1';
 const $ = id => document.getElementById(id);
@@ -77,7 +78,7 @@ function waitForMenuReady() {
 function waitForScene() {
   return new Promise(resolve => {
     const probe = () => {
-      const game = Phaser.GAMES.find(Boolean);
+      const game = Phaser.GAMES?.find?.(Boolean);
       const scene = game?.scene?.getScene?.('runner');
       if (scene?.model) return resolve(scene);
       requestAnimationFrame(probe);
@@ -86,49 +87,70 @@ function waitForScene() {
   });
 }
 
-function restorePreviewAlpha(pixels) {
-  let maxAlpha = 0;
-  for (let i = 3; i < pixels.data.length; i += 4) maxAlpha = Math.max(maxAlpha, pixels.data[i]);
-  if (!(maxAlpha > 0 && maxAlpha < 220)) return;
+function prepareRunSource(image) {
+  const surface = document.createElement('canvas');
+  surface.width = image.width;
+  surface.height = image.height;
+  const ctx = surface.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(image, 0, 0);
 
-  const cutoff = Math.max(2, maxAlpha * .06);
-  const solidAt = Math.max(cutoff + 1, maxAlpha * .28);
-  const edgeSpan = Math.max(1, solidAt - cutoff);
+  // Mesma regra do Assets.prepareSpriteCutouts() usada pela gameplay para o
+  // atlas v8: remove apenas o matte de alpha, preservando as cores do Goku.
+  const pixels = ctx.getImageData(0, 0, surface.width, surface.height);
   for (let i = 3; i < pixels.data.length; i += 4) {
-    const alpha = pixels.data[i];
-    if (alpha <= cutoff) pixels.data[i] = 0;
-    else if (alpha >= solidAt) pixels.data[i] = 255;
-    else pixels.data[i] = Math.min(255, (alpha - cutoff) * 255 / edgeSpan);
+    pixels.data[i] = Math.max(0, Math.min(255, (pixels.data[i] - 232) * 255 / 16));
   }
+  ctx.clearRect(0, 0, surface.width, surface.height);
+  ctx.putImageData(pixels, 0, 0);
+  return surface;
 }
 
 function animateSheetPreview(node) {
-  if (!node) return () => {};
+  if (!node || !C) return () => {};
+
   let frame = 0;
   let timer = null;
   let stopped = false;
+  const canvas = document.createElement('canvas');
+  canvas.width = 160;
+  canvas.height = 160;
+  canvas.setAttribute('aria-hidden', 'true');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  node.replaceChildren(canvas);
+
   const image = new Image();
   image.onload = () => {
     if (stopped) return;
-    const canvas = document.createElement('canvas');
-    canvas.width = image.width;
-    canvas.height = image.height;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    ctx.drawImage(image, 0, 0);
-    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    restorePreviewAlpha(pixels);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.putImageData(pixels, 0, 0);
-    node.style.backgroundImage = `url(${canvas.toDataURL('image/png')})`;
-    timer = setInterval(() => {
-      const x = -(frame % 4) * 105;
-      const y = -Math.floor(frame / 4) * 115;
-      node.style.backgroundPosition = `${x}px ${y}px`;
+    const source = prepareRunSource(image);
+
+    const renderFrame = () => {
+      if (stopped) return;
+      const bounds = C.RUN_FRAMES[frame];
+      const pivot = C.RUN_PIVOTS[frame];
+      const scale = C.PLAYER_SCALE.run;
+      ctx.clearRect(0, 0, 160, 160);
+      ctx.drawImage(
+        source,
+        bounds[0], bounds[1], bounds[2], bounds[3],
+        80 + (bounds[0] - pivot[0]) * scale,
+        140 + (bounds[1] - pivot[1]) * scale,
+        bounds[2] * scale,
+        bounds[3] * scale,
+      );
       frame = (frame + 1) % 8;
-    }, 86);
+    };
+
+    renderFrame();
+    timer = setInterval(renderFrame, 1000 / 12);
   };
-  image.src = './assets/spritesheets/goku_run_v9.png';
-  return () => { stopped = true; if (timer) clearInterval(timer); };
+  image.onerror = () => console.error('Falha ao carregar atlas do Goku para a história:', C.PATHS.run);
+  image.src = C.PATHS.run;
+
+  return () => {
+    stopped = true;
+    if (timer) clearInterval(timer);
+    node.replaceChildren();
+  };
 }
 
 function restoreMenu(panel) {
@@ -159,7 +181,7 @@ function showStory() {
   const next = $('story-next');
   const skip = $('story-skip');
   const progress = $('story-progress');
-  if (!overlay || !panel || !next) {
+  if (!overlay || !panel || !next || !title || !kicker || !text || !progress) {
     unlockStoryGate();
     return;
   }
@@ -167,7 +189,7 @@ function showStory() {
   panel.style.visibility = 'hidden';
   overlay.hidden = false;
   let page = 0;
-  const stopPreview = animateSheetPreview($('story-runner-preview'));
+  let stopPreview = () => {};
 
   const render = () => {
     const item = STORY[page];
@@ -194,7 +216,9 @@ function showStory() {
     finishStory();
   });
   skip?.addEventListener('click', finishStory, { once: true });
+
   render();
+  stopPreview = animateSheetPreview($('story-runner-preview'));
 }
 
 function buildParty(scene) {
@@ -250,9 +274,11 @@ async function beginEnding(scene) {
 async function bootStoryRuntime() {
   if (qaMode) return;
   await waitForMenuReady();
+
   if (hasSeenStory()) unlockStoryGate();
   else showStory();
 
+  // O final pode aguardar a cena Phaser sem bloquear a introdução.
   const scene = await waitForScene();
   let endingStarted = false;
   const watch = () => {

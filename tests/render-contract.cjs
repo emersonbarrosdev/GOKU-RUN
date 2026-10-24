@@ -19,7 +19,32 @@ const assert = require('node:assert/strict');
       game.track.segments = [{ start: -10000, end: 100000 }];
       game.phaseBanner = 0;
 
-      const stats = key => {
+      const pixelStats = (data, startX, startY, width, height, stride) => {
+        let maxAlpha = 0;
+        let visiblePixels = 0;
+        let solidPixels = 0;
+        let orangePixels = 0;
+        let bluePixels = 0;
+
+        for (let y = startY; y < startY + height; y++) {
+          for (let x = startX; x < startX + width; x++) {
+            const i = (y * stride + x) * 4;
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            const a = data[i + 3];
+            maxAlpha = Math.max(maxAlpha, a);
+            if (a >= 40) visiblePixels++;
+            if (a >= 220) solidPixels++;
+            if (a >= 180 && r >= 130 && g >= 35 && g <= 185 && b <= 105) orangePixels++;
+            if (a >= 180 && b >= 55 && b > r * .75 && b > g * .9) bluePixels++;
+          }
+        }
+
+        return { maxAlpha, visiblePixels, solidPixels, orangePixels, bluePixels };
+      };
+
+      const textureStats = key => {
         const source = scene.textures.get(key).getSourceImage();
         const canvas = document.createElement('canvas');
         canvas.width = source.width;
@@ -27,18 +52,31 @@ const assert = require('node:assert/strict');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         ctx.drawImage(source, 0, 0);
         const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-        let maxAlpha = 0, visiblePixels = 0, solidPixels = 0;
-        for (let i = 3; i < data.length; i += 4) {
-          maxAlpha = Math.max(maxAlpha, data[i]);
-          if (data[i] >= 40) visiblePixels++;
-          if (data[i] >= 220) solidPixels++;
-        }
-        return { maxAlpha, visiblePixels, solidPixels, width: canvas.width, height: canvas.height };
+        return {
+          ...pixelStats(data, 0, 0, canvas.width, canvas.height, canvas.width),
+          width: canvas.width,
+          height: canvas.height,
+        };
       };
 
-      const hero = stats('hero');
-      const soldier = stats('soldier');
-      const flyer = stats('flyer');
+      const frameStats = (key, count, frameWidth = 160, frameHeight = 160) => {
+        const source = scene.textures.get(key).getSourceImage();
+        const canvas = document.createElement('canvas');
+        canvas.width = source.width;
+        canvas.height = source.height;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(source, 0, 0);
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        return Array.from({ length: count }, (_, frame) => ({
+          frame,
+          ...pixelStats(data, frame * frameWidth, 0, frameWidth, frameHeight, canvas.width),
+        }));
+      };
+
+      const hero = textureStats('hero');
+      const heroFrames = frameStats('hero', 12);
+      const soldier = textureStats('soldier');
+      const flyer = textureStats('flyer');
 
       const player = game.player;
       player.grounded = true;
@@ -84,7 +122,17 @@ const assert = require('node:assert/strict');
       const terrain840 = scene.terrain.tilePositionX;
 
       return {
-        hero, soldier, flyer,
+        hero,
+        heroFrames,
+        soldier,
+        flyer,
+        heroRuntime: {
+          visible: scene.hero.visible,
+          alpha: scene.hero.alpha,
+          x: scene.hero.x,
+          y: scene.hero.y,
+          texture: scene.hero.texture.key,
+        },
         frames: { run0, run3, run7, jumpStart, jumpUp, jumpDown, landing, enemyFrame },
         terrain: { terrain839, terrain840 },
       };
@@ -97,6 +145,22 @@ const assert = require('node:assert/strict');
       assert.ok(value.visiblePixels >= 300, `${name} precisa ter área visual suficiente`);
       assert.ok(value.solidPixels >= 80, `${name} não pode ser apenas um fantasma translúcido`);
     }
+
+    // O erro que chegou à main anteriormente tinha alpha, mas só mostrava um
+    // contorno escuro. Agora o contrato exige o corpo real e colorido do Goku.
+    assert.ok(result.hero.orangePixels >= 1500, 'atlas do Goku precisa conter o gi laranja real');
+    assert.ok(result.hero.bluePixels >= 350, 'atlas do Goku precisa conter detalhes azuis reais');
+
+    for (const frame of result.heroFrames.slice(0, 8)) {
+      assert.ok(frame.visiblePixels >= 700, `corrida frame ${frame.frame} precisa conter o corpo completo`);
+      assert.ok(frame.solidPixels >= 350, `corrida frame ${frame.frame} precisa ser opaco`);
+      assert.ok(frame.orangePixels >= 180, `corrida frame ${frame.frame} precisa mostrar o gi laranja`);
+      assert.ok(frame.bluePixels >= 35, `corrida frame ${frame.frame} precisa mostrar detalhes azuis`);
+    }
+
+    assert.equal(result.heroRuntime.visible, true, 'sprite do Goku precisa estar visível durante gameplay');
+    assert.equal(result.heroRuntime.alpha, 1, 'sprite do Goku precisa renderizar com alpha 1');
+    assert.equal(result.heroRuntime.texture, 'hero', 'gameplay precisa usar o atlas hero validado');
 
     assert.deepEqual(result.frames, {
       run0: 0,
@@ -111,7 +175,7 @@ const assert = require('node:assert/strict');
     assert.equal(result.terrain.terrain839, 839, 'terreno deve usar deslocamento inteiro');
     assert.equal(result.terrain.terrain840, 840, 'wrap do terreno não pode produzir salto fracionário');
 
-    console.log('PASS: Goku/inimigos opacos, corrida e pulo sincronizados com a simulação, terreno pixel-alinhado.');
+    console.log('PASS: Goku com corpo colorido real, 8 poses de corrida, pulo sincronizado, inimigos visíveis e terreno alinhado.');
   } finally {
     await browser.close();
   }
