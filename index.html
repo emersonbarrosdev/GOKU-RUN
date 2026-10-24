@@ -14,10 +14,10 @@
 
       <div id="hud" hidden>
         <div class="hud-top">
-          <div class="chip phase"><small id="phase-label">FASE 1/5</small><strong id="phase-name">CAMPOS DE NAMEK</strong><span><i id="phase-fill"></i></span></div>
+          <div class="chip phase"><small id="phase-label">FASE 1/5</small><strong id="phase-name">CAMPOS DE NAMEK</strong><span class="progress"><i id="phase-fill"></i></span></div>
           <div class="chip lives" aria-label="3 vidas"><span>♥</span><span>♥</span><span>♥</span></div>
           <div class="chip score"><small>PONTOS</small><strong id="score">000000</strong></div>
-          <button id="pause-button" class="round" type="button">Ⅱ</button>
+          <button id="pause-button" class="round icon-button" type="button">Ⅱ</button>
           <button id="sound-button" type="button">SOM LIGADO</button>
         </div>
         <div id="phase-banner"></div>
@@ -30,10 +30,12 @@
       </button>
 
       <aside id="panel" data-mode="loading">
-        <h1 id="panel-title">GOKU RUN</h1>
-        <p id="panel-subtitle">Carregando… 0%</p>
-        <p id="result-score"></p>
-        <button id="start-button" type="button">JOGAR</button>
+        <div class="panel-card">
+          <h1 id="panel-title">GOKU RUN</h1>
+          <p id="panel-subtitle">Carregando… 0%</p>
+          <p id="result-score"></p>
+          <button id="start-button" type="button">JOGAR</button>
+        </div>
       </aside>
 
       <section id="story-overlay" hidden aria-label="História de introdução">
@@ -71,9 +73,9 @@
       </section>
 
       <div id="rotate-notice" hidden>
-        <div class="phone">↻</div>
+        <span>↻</span>
         <strong>Gire o celular</strong>
-        <small>Jogue na horizontal</small>
+        <p>Jogue na horizontal</p>
       </div>
     </section>
   </main>
