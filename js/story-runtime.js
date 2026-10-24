@@ -86,6 +86,22 @@ function waitForScene() {
   });
 }
 
+function restorePreviewAlpha(pixels) {
+  let maxAlpha = 0;
+  for (let i = 3; i < pixels.data.length; i += 4) maxAlpha = Math.max(maxAlpha, pixels.data[i]);
+  if (!(maxAlpha > 0 && maxAlpha < 220)) return;
+
+  const cutoff = Math.max(2, maxAlpha * .06);
+  const solidAt = Math.max(cutoff + 1, maxAlpha * .28);
+  const edgeSpan = Math.max(1, solidAt - cutoff);
+  for (let i = 3; i < pixels.data.length; i += 4) {
+    const alpha = pixels.data[i];
+    if (alpha <= cutoff) pixels.data[i] = 0;
+    else if (alpha >= solidAt) pixels.data[i] = 255;
+    else pixels.data[i] = Math.min(255, (alpha - cutoff) * 255 / edgeSpan);
+  }
+}
+
 function animateSheetPreview(node) {
   if (!node) return () => {};
   let frame = 0;
@@ -100,17 +116,9 @@ function animateSheetPreview(node) {
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     ctx.drawImage(image, 0, 0);
     const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    let maxAlpha = 0;
-    for (let i = 3; i < pixels.data.length; i += 4) maxAlpha = Math.max(maxAlpha, pixels.data[i]);
-    if (maxAlpha > 0 && maxAlpha < 220) {
-      const cutoff = Math.max(2, maxAlpha * .07);
-      const span = Math.max(1, maxAlpha - cutoff);
-      for (let i = 3; i < pixels.data.length; i += 4) {
-        const alpha = pixels.data[i];
-        pixels.data[i] = alpha <= cutoff ? 0 : Math.min(255, (alpha - cutoff) * 255 / span);
-      }
-      ctx.putImageData(pixels, 0, 0);
-    }
+    restorePreviewAlpha(pixels);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.putImageData(pixels, 0, 0);
     node.style.backgroundImage = `url(${canvas.toDataURL('image/png')})`;
     timer = setInterval(() => {
       const x = -(frame % 4) * 105;
