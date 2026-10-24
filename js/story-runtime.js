@@ -34,8 +34,6 @@ function unlockStoryGate() {
 }
 
 if (!qaMode) {
-  // Este gate é registrado antes de main.js. Mesmo em máquina rápida ou se o
-  // jogador apertar Espaço imediatamente, a corrida não começa antes da intro.
   document.addEventListener('click', blockPrematureStart, true);
   window.addEventListener('keydown', blockPrematureStart, true);
 }
@@ -58,12 +56,24 @@ const STORY = [
   },
 ];
 
+function waitForMenuReady() {
+  return new Promise(resolve => {
+    const probe = () => {
+      const panel = $('panel');
+      const start = $('start-button');
+      if (panel?.dataset?.mode === 'menu' && start && !start.hidden) return resolve();
+      requestAnimationFrame(probe);
+    };
+    probe();
+  });
+}
+
 function waitForScene() {
   return new Promise(resolve => {
     const probe = () => {
       const game = Phaser.GAMES.find(Boolean);
       const scene = game?.scene?.getScene?.('runner');
-      if (scene?.model && scene?.textures?.exists('hero')) return resolve(scene);
+      if (scene?.model) return resolve(scene);
       requestAnimationFrame(probe);
     };
     probe();
@@ -82,7 +92,7 @@ function animateSheetPreview(node) {
   return () => clearInterval(timer);
 }
 
-function showStory(scene) {
+function showStory() {
   const overlay = $('story-overlay');
   const panel = $('panel');
   const title = $('story-title');
@@ -95,7 +105,6 @@ function showStory(scene) {
     return;
   }
 
-  // Fluxo real: loading -> história -> menu -> jogador aperta JOGAR.
   panel.style.visibility = 'hidden';
   overlay.hidden = false;
   let page = 0;
@@ -115,7 +124,6 @@ function showStory(scene) {
     overlay.hidden = true;
     panel.style.visibility = '';
     unlockStoryGate();
-    scene.syncUI?.();
     const start = $('start-button');
     if (start && !start.hidden) start.focus({ preventScroll: true });
   };
@@ -250,13 +258,14 @@ async function beginEnding(scene) {
 
 async function bootStoryRuntime() {
   if (qaMode) return;
+
+  // A introdução depende apenas de o menu DOM estar pronto. Ela não depende da
+  // descoberta da Scene Phaser e, portanto, não pode desaparecer por timing.
+  await waitForMenuReady();
+  showStory();
+
+  // A Scene só é necessária para observar a vitória e construir o encerramento.
   const scene = await waitForScene();
-
-  // Como o gate já foi registrado antes de main.js, este estado não pode ser
-  // pulado por clique ou teclado enquanto a narrativa ainda está chegando.
-  while (scene.model.state !== 'menu') await sleep(16);
-  showStory(scene);
-
   let endingStarted = false;
   const watch = () => {
     if (!endingStarted && scene.model?.state === 'victory') {
