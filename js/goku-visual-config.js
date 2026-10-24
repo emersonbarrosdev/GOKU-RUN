@@ -1,4 +1,4 @@
-// Visual v10: spritesheets separados do Goku, alpha normalizado e recortes determinísticos.
+// Visual v11: spritesheets separados do Goku, alpha restaurado e recortes determinísticos.
 // Este arquivo roda DEPOIS de game.js e ANTES de main.js.
 const C = window.GokuCore;
 if (!C) throw new Error('GokuCore não inicializado antes do visual-config');
@@ -42,22 +42,26 @@ function canvasFrom(source) {
   return { canvas, ctx };
 }
 
-function normalizeLowAlpha(source) {
+function restoreGeneratedSpriteAlpha(source) {
   const { canvas, ctx } = canvasFrom(source);
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const data = image.data;
   let maxAlpha = 0;
   for (let i = 3; i < data.length; i += 4) maxAlpha = Math.max(maxAlpha, data[i]);
 
-  // Os PNGs v9 vieram com o desenho inteiro limitado a alpha baixo (máximo ~75),
-  // por isso Goku ficava praticamente invisível. Normalize apenas quando o
-  // arquivo realmente estiver abaixo da faixa opaca normal.
+  // Os sheets v9 foram exportados com o desenho inteiro sem atingir opacidade.
+  // Uma normalização linear ainda deixava o corpo final em ~184/255 porque o
+  // maior alpha do arquivo não pertencia ao miolo do personagem. Tratamos
+  // pixels muito fracos como antialias e tornamos o corpo real opaco.
   if (maxAlpha > 0 && maxAlpha < 220) {
-    const cutoff = Math.max(2, maxAlpha * 0.07);
-    const span = Math.max(1, maxAlpha - cutoff);
+    const cutoff = Math.max(2, maxAlpha * 0.06);
+    const solidAt = Math.max(cutoff + 1, maxAlpha * 0.28);
+    const edgeSpan = Math.max(1, solidAt - cutoff);
     for (let i = 3; i < data.length; i += 4) {
       const alpha = data[i];
-      data[i] = alpha <= cutoff ? 0 : clamp255((alpha - cutoff) * 255 / span);
+      if (alpha <= cutoff) data[i] = 0;
+      else if (alpha >= solidAt) data[i] = 255;
+      else data[i] = clamp255((alpha - cutoff) * 255 / edgeSpan);
     }
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.putImageData(image, 0, 0);
@@ -70,9 +74,8 @@ function removeLegacyAlphaMatte(source) {
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const data = image.data;
 
-  // O atlas antigo de inimigos usa o canal alpha para separar personagem e
-  // matte. Nunca derive alpha da luminosidade RGB: isso tornava cabelo, roupa
-  // e contornos escuros transparentes.
+  // O atlas antigo de inimigos usa o próprio canal alpha para separar
+  // personagem e matte. Usar luminosidade RGB apagava cabelo/roupas escuras.
   for (let i = 3; i < data.length; i += 4) {
     data[i] = clamp255((data[i] - 232) * 255 / 16);
   }
@@ -81,9 +84,9 @@ function removeLegacyAlphaMatte(source) {
   return canvas;
 }
 
-C.Assets.prototype.prepareSpriteCutouts = function prepareSpriteCutoutsV10() {
+C.Assets.prototype.prepareSpriteCutouts = function prepareSpriteCutoutsV11() {
   if (typeof document === 'undefined') return;
-  if (this.images.run) this.images.run = normalizeLowAlpha(this.images.run);
-  if (this.images.jump) this.images.jump = normalizeLowAlpha(this.images.jump);
+  if (this.images.run) this.images.run = restoreGeneratedSpriteAlpha(this.images.run);
+  if (this.images.jump) this.images.jump = restoreGeneratedSpriteAlpha(this.images.jump);
   if (this.images.enemies) this.images.enemies = removeLegacyAlphaMatte(this.images.enemies);
 };
