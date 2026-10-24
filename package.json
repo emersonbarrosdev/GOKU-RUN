@@ -11,6 +11,7 @@
     "test:mobile": "node tests/mobile-smoke.cjs",
     "test:visual": "node tests/visual-audit.cjs",
     "test:story": "node tests/story-smoke.cjs",
+    "test:render": "node tests/render-contract.cjs",
     "android:sync": "npm run build && cap sync android",
     "android:open": "cap open android",
     "android:apk": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-android.ps1"

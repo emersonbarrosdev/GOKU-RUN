@@ -2,30 +2,29 @@ const { chromium } = require('playwright-core');
 const assert = require('node:assert/strict');
 
 (async () => {
-  const browser = await chromium.launch({
-    headless: true,
-    executablePath: process.env.CHROME_PATH,
-  });
-
+  const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_PATH });
   try {
-    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+    const page = await context.newPage();
     const url = process.env.TEST_URL || 'http://127.0.0.1:4173/';
+
     await page.goto(url, { waitUntil: 'networkidle' });
+    await page.evaluate(() => localStorage.removeItem('goku-run-story-seen-v1'));
+    await page.reload({ waitUntil: 'networkidle' });
 
     const story = page.locator('#story-overlay');
     await story.waitFor({ state: 'visible', timeout: 15000 });
-
     await expectText(page, '#story-kicker', 'CAPÍTULO 1');
     await expectText(page, '#story-title', 'Goku perdeu seus poderes');
     await expectText(page, '#story-text', 'fruto roxo');
+    await page.getByRole('button', { name: 'PULAR HISTÓRIA' }).waitFor({ state: 'visible' });
 
-    // O menu pode existir no DOM, mas não pode ser usado antes da história.
     const panelVisibility = await page.locator('#panel').evaluate(el => getComputedStyle(el).visibility);
     assert.equal(panelVisibility, 'hidden');
 
     await page.keyboard.press('Space');
-    await page.waitForTimeout(150);
-    assert.equal(await story.isVisible(), true, 'Espaço não pode pular a introdução');
+    await page.waitForTimeout(120);
+    assert.equal(await story.isVisible(), true, 'Espaço não pode iniciar o jogo por trás da introdução');
 
     await page.getByRole('button', { name: 'CONTINUAR' }).click();
     await expectText(page, '#story-kicker', 'CAPÍTULO 2');
@@ -37,15 +36,27 @@ const assert = require('node:assert/strict');
 
     await page.getByRole('button', { name: 'IR PARA O MENU' }).click();
     await story.waitFor({ state: 'hidden', timeout: 5000 });
-
-    const start = page.getByRole('button', { name: 'JOGAR' });
+    let start = page.getByRole('button', { name: 'JOGAR' });
     await start.waitFor({ state: 'visible', timeout: 5000 });
-    assert.equal(await page.locator('#panel').evaluate(el => getComputedStyle(el).visibility), 'visible');
-
     await start.click();
     await page.locator('#hud').waitFor({ state: 'visible', timeout: 5000 });
 
-    console.log('PASS: loading -> história -> menu -> JOGAR -> corrida.');
+    // Depois de vista uma vez, a história não é obrigatória em todo boot.
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForTimeout(250);
+    assert.equal(await story.isVisible(), false, 'história já vista deve ser pulada automaticamente');
+    start = page.getByRole('button', { name: 'JOGAR' });
+    await start.waitFor({ state: 'visible', timeout: 5000 });
+
+    // O botão PULAR HISTÓRIA também precisa funcionar no primeiro acesso.
+    await page.evaluate(() => localStorage.removeItem('goku-run-story-seen-v1'));
+    await page.reload({ waitUntil: 'networkidle' });
+    await story.waitFor({ state: 'visible', timeout: 5000 });
+    await page.getByRole('button', { name: 'PULAR HISTÓRIA' }).click();
+    await story.waitFor({ state: 'hidden', timeout: 5000 });
+    await page.getByRole('button', { name: 'JOGAR' }).waitFor({ state: 'visible', timeout: 5000 });
+
+    console.log('PASS: história completa, pular história e não repetir após visualização.');
   } finally {
     await browser.close();
   }

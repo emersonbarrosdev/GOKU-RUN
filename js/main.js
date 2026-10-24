@@ -44,8 +44,8 @@ class RunnerScene extends Phaser.Scene {
     this.world=this.add.container(0,0);
     this.background=this.add.image(0,0,'world0').setOrigin(0);this.previous=this.add.image(0,0,'world0').setOrigin(0);
     this.world.add([this.background,this.previous]);
-    // Keep one geometry mask and move it with the world. Rebuilding stencil
-    // geometry every frame caused avoidable GPU uploads and visible hitches.
+    // Uma única máscara geométrica acompanha o mundo. O deslocamento é
+    // pixel-alinhado para evitar shimmer/flicker no limite da textura.
     this.floorMask=this.make.graphics({x:0,y:0,add:false});
     const groundMask=this.floorMask.createGeometryMask();
     this.terrain=this.add.tileSprite(0,GROUND-3,1280,164,'terrain-0').setOrigin(0).setMask(groundMask);
@@ -72,7 +72,6 @@ class RunnerScene extends Phaser.Scene {
   }
   isPortrait(){return matchMedia('(orientation:portrait) and (pointer:coarse)').matches;}
   makeTextures(){
-    // Whole-frame atlas with a common anatomical origin; never separate limbs.
     const atlas=(key,frames)=>{
       const surface=document.createElement('canvas');surface.width=160*frames.length;surface.height=160;
       const ctx=surface.getContext('2d');
@@ -91,9 +90,9 @@ class RunnerScene extends Phaser.Scene {
     for(const [name,bounds] of [['crystal',[1109,627,341,372]],['boulder',[1627,690,329,308]]])this.textures.get('ground').add(name,0,...bounds);
     const orb=document.createElement('canvas');orb.width=48;orb.height=48;const oc=orb.getContext('2d');
     const glow=oc.createRadialGradient(20,18,1,24,24,23);glow.addColorStop(0,'#fffce3');glow.addColorStop(.42,'#ffdd76');glow.addColorStop(.65,'#ed982c');glow.addColorStop(1,'rgba(255,190,60,0)');oc.fillStyle=glow;oc.fillRect(0,0,48,48);this.textures.addCanvas('orb',orb);
+    // Mantemos a animação run apenas para a cutscene final. Durante gameplay o
+    // frame vem diretamente do Player.frame, que é calculado pela distância.
     this.anims.create({key:'run',frames:this.anims.generateFrameNumbers('hero',{start:0,end:7}),frameRate:335/C.RUN_STRIDE*8,repeat:-1});
-    this.anims.create({key:'enemy-run',frames:this.anims.generateFrameNumbers('soldier',{start:0,end:3}),frameRate:190/110*4,repeat:-1});
-    this.anims.create({key:'enemy-fly',frames:this.anims.generateFrameNumbers('flyer',{start:0,end:1}),frameRate:5,repeat:-1});
     for(let i=0;i<3;i++)this.anims.create({key:'ally-'+i,frames:[0,1,2,3,2,1].map(n=>({key:'allies',frame:i*4+n})),frameRate:[5,4,6][i],repeat:-1});
   }
   bindInputs(){
@@ -116,8 +115,6 @@ class RunnerScene extends Phaser.Scene {
   update(time,delta){
     if(!this.model)return;const g=this.model;
     if(g.state==='playing'){
-      // 60 Hz is enough for this runner and cuts model/GC work in half. Clamp
-      // accumulated time so one slow frame cannot trigger a catch-up spiral.
       const frameSeconds=Math.min(Math.max(delta,0)/1000,MAX_FRAME_DELTA);
       this.accumulator=Math.min(this.accumulator+frameSeconds,MAX_FRAME_DELTA);
       let steps=0;
@@ -141,7 +138,7 @@ class RunnerScene extends Phaser.Scene {
       for(const segment of segments)this.floorMask.fillRect(segment.start,GROUND-3,segment.end-segment.start,164);
       this.maskSegments=segments.map(segment=>({start:segment.start,end:segment.end}));
     }
-    this.floorMask.setPosition(-distance,0);
+    this.floorMask.setPosition(-Math.floor(distance),0);
   }
   renderWorld(){
     const g=this.model,p=g.player,playing=g.state==='playing';
@@ -157,7 +154,7 @@ class RunnerScene extends Phaser.Scene {
     this.previous.setVisible(g.phaseFade>0);if(g.phaseFade>0){placeBackground(this.previous,g.previousPhase,1);this.previous.setAlpha(g.phaseFade);}
     const terrainKey='terrain-'+g.phaseIndex;
     if(this.terrain.displayTexture.key!==terrainKey)this.terrain.setTexture(terrainKey);
-    this.terrain.tilePositionX=g.track.distance;
+    this.terrain.tilePositionX=Math.floor(g.track.distance);
     this.syncGroundMask(g.track.segments,g.track.distance);
     this.effects.clear();this.foreground.clear();
     for(let i=0;i<g.track.segments.length-1;i++){
@@ -170,8 +167,6 @@ class RunnerScene extends Phaser.Scene {
       }
     }
     if(g.track.supports(p.x))this.effects.fillStyle(0x10202a,.24).fillEllipse(p.x,GROUND+2,55,7);
-    // Energy is an effect behind ONE opaque character, never stacked body
-    // silhouettes or overlapping flame columns obscuring the running pose.
     if(p.kiActive){
       const wave=Math.sin(g.time*11)*3;
       this.effects.fillStyle(0xffb52e,.17).fillPoints([
@@ -184,11 +179,13 @@ class RunnerScene extends Phaser.Scene {
         this.effects.lineStyle(1.6,0xffd778,(1-age)*.8).lineBetween(x,y,x+5+age*5,y-1);
       }
     }
-    this.hero.setPosition(p.x,p.foot).setAlpha(1);
+
+    // O gameplay usa UM relógio: Player.runTime/frame. Antes o Phaser tocava
+    // outra animação independente e a corrida visual podia sair de sincronia.
+    this.hero.setPosition(p.x,p.foot).setAlpha(1).stop();
     if(p.hurtTime>0)this.hero.setTint(0xffb6a3);else this.hero.clearTint();
-    if(p.grounded&&p.landTime<=0){this.hero.play('run',true);this.hero.anims.timeScale=g.phase.speed/335;}
-    else{this.hero.stop();this.hero.setFrame(8+p.frame);}
-    if(!playing)this.hero.anims.pause();else if(this.hero.anims.isPaused)this.hero.anims.resume();
+    this.hero.setFrame(p.grounded&&p.landTime<=0?p.frame:8+p.frame);
+
     const alive=this.aliveViews;alive.clear();
     const view=(entity,key)=>{alive.add(entity);let v=this.views.get(entity);if(!v){v=this.add.sprite(0,0,key,0).setOrigin(.5,140/160);this.world.add(v);this.world.bringToTop(this.foreground);this.labels.forEach(l=>this.world.bringToTop(l));this.views.set(entity,v);}return v;};
     for(const e of g.enemies){
@@ -197,10 +194,10 @@ class RunnerScene extends Phaser.Scene {
         this.effects.fillStyle(0xfff4ce,1).fillEllipse(e.x-16,e.foot-13,31,17);continue;
       }
       const key=e.type==='soldier'?'soldier':e.type==='flyer'?'flyer':'ground',v=view(e,key);
-      if(e.type==='soldier')v.play('enemy-run',true);
-      else if(e.type==='flyer'){if(e.shot&&e.recoil<=0||e.chargeTime===0)v.play('enemy-fly',true);else{v.stop();v.setFrame(e.flightFrame);}}
+      if(e.type==='soldier')v.stop().setFrame(Math.floor(e.runPhase*4)%4);
+      else if(e.type==='flyer')v.stop().setFrame(e.flightFrame);
       else{const frame=this.textures.getFrame('ground',e.type);v.setFrame(e.type).setOrigin(.5,1).setDisplaySize(e.height*frame.width/frame.height,e.height);}
-      v.setPosition(e.x,e.foot);if(!playing)v.anims.pause();else if(v.anims.isPaused)v.anims.resume();
+      v.setPosition(e.x,e.foot);
       if(e.type==='flyer'){this.effects.lineStyle(2,0xd0b1ff,.4);for(let i=0;i<3;i++)this.effects.lineBetween(e.x+35,e.foot-15-i*8,e.x+70+Math.sin(g.time*10+i)*15,e.foot-15-i*8);}
       if(!e.shot&&e.chargeTime>0)this.foreground.fillStyle(e.airborne?0xd5b9ff:0xffda8e,.9).fillCircle(e.x-36,e.foot-(e.airborne?30:55),3+Math.min(1,e.chargeTime/.38)*5);
     }
@@ -244,8 +241,6 @@ const game=new Phaser.Game({type:Phaser.AUTO,parent:'game-container',width:1280,
   fps:{target:60,min:30,forceSetTimeOut:false,smoothStep:true},
   scale:{mode:Phaser.Scale.FIT,autoCenter:Phaser.Scale.CENTER_BOTH},
   input:{activePointers:2},audio:{disableWebAudio:false},scene:RunnerScene});
-// The CSS stage changes with safe areas and device rotation, independently of
-// Phaser's window resize polling. Keep canvas and DOM controls on one rectangle.
 const stageObserver=new ResizeObserver(()=>game.scale.refresh());
 stageObserver.observe($('stage'));
 game.events.once(Phaser.Core.Events.DESTROY,()=>stageObserver.disconnect());

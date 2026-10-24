@@ -5,21 +5,27 @@ const params = new URLSearchParams(location.search);
 const qaMode = params.get('debug') === '1' || params.get('autostart') === '1';
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const STORY_SEEN_KEY = 'goku-run-story-seen-v1';
 
 let storyUnlocked = qaMode;
 
+function hasSeenStory() {
+  try { return localStorage.getItem(STORY_SEEN_KEY) === '1'; } catch { return false; }
+}
+
+function markStorySeen() {
+  try { localStorage.setItem(STORY_SEEN_KEY, '1'); } catch {}
+}
+
 function blockPrematureStart(event) {
   if (storyUnlocked || qaMode) return;
-
   if (event.type === 'click') {
     const target = event.target instanceof Element ? event.target.closest('#start-button') : null;
     if (!target) return;
   } else if (event.type === 'keydown') {
     const key = String(event.key || '').toLowerCase();
     if (![' ', 'arrowup', 'w'].includes(key)) return;
-  } else {
-    return;
-  }
+  } else return;
 
   event.preventDefault();
   event.stopPropagation();
@@ -80,16 +86,68 @@ function waitForScene() {
   });
 }
 
+function restorePreviewAlpha(pixels) {
+  let maxAlpha = 0;
+  for (let i = 3; i < pixels.data.length; i += 4) maxAlpha = Math.max(maxAlpha, pixels.data[i]);
+  if (!(maxAlpha > 0 && maxAlpha < 220)) return;
+
+  const cutoff = Math.max(2, maxAlpha * .06);
+  const solidAt = Math.max(cutoff + 1, maxAlpha * .28);
+  const edgeSpan = Math.max(1, solidAt - cutoff);
+  for (let i = 3; i < pixels.data.length; i += 4) {
+    const alpha = pixels.data[i];
+    if (alpha <= cutoff) pixels.data[i] = 0;
+    else if (alpha >= solidAt) pixels.data[i] = 255;
+    else pixels.data[i] = Math.min(255, (alpha - cutoff) * 255 / edgeSpan);
+  }
+}
+
 function animateSheetPreview(node) {
   if (!node) return () => {};
   let frame = 0;
-  const timer = setInterval(() => {
-    const x = -(frame % 4) * 105;
-    const y = -Math.floor(frame / 4) * 115;
-    node.style.backgroundPosition = `${x}px ${y}px`;
-    frame = (frame + 1) % 8;
-  }, 86);
-  return () => clearInterval(timer);
+  let timer = null;
+  let stopped = false;
+  const image = new Image();
+  image.onload = () => {
+    if (stopped) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(image, 0, 0);
+    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    restorePreviewAlpha(pixels);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.putImageData(pixels, 0, 0);
+    node.style.backgroundImage = `url(${canvas.toDataURL('image/png')})`;
+    timer = setInterval(() => {
+      const x = -(frame % 4) * 105;
+      const y = -Math.floor(frame / 4) * 115;
+      node.style.backgroundPosition = `${x}px ${y}px`;
+      frame = (frame + 1) % 8;
+    }, 86);
+  };
+  image.src = './assets/spritesheets/goku_run_v9.png';
+  return () => { stopped = true; if (timer) clearInterval(timer); };
+}
+
+function restoreMenu(panel) {
+  panel.hidden = false;
+  panel.dataset.mode = 'menu';
+  panel.style.display = '';
+  panel.style.visibility = 'visible';
+  const start = $('start-button');
+  if (start) {
+    start.hidden = false;
+    start.textContent = 'JOGAR';
+    start.removeAttribute('aria-hidden');
+  }
+  const hud = $('hud');
+  const ki = $('ki-button');
+  if (hud) hud.hidden = true;
+  if (ki) ki.hidden = true;
+  unlockStoryGate();
+  if (start) start.focus({ preventScroll: true });
 }
 
 function showStory() {
@@ -99,6 +157,7 @@ function showStory() {
   const kicker = $('story-kicker');
   const text = $('story-text');
   const next = $('story-next');
+  const skip = $('story-skip');
   const progress = $('story-progress');
   if (!overlay || !panel || !next) {
     unlockStoryGate();
@@ -122,27 +181,8 @@ function showStory() {
   const finishStory = () => {
     stopPreview();
     overlay.hidden = true;
-
-    // Não dependa de um próximo frame do Phaser para restaurar o menu. A
-    // transição narrativa -> menu deve ser completa e síncrona.
-    panel.hidden = false;
-    panel.dataset.mode = 'menu';
-    panel.style.display = '';
-    panel.style.visibility = 'visible';
-
-    const start = $('start-button');
-    if (start) {
-      start.hidden = false;
-      start.textContent = 'JOGAR';
-      start.removeAttribute('aria-hidden');
-    }
-    const hud = $('hud');
-    const ki = $('ki-button');
-    if (hud) hud.hidden = true;
-    if (ki) ki.hidden = true;
-
-    unlockStoryGate();
-    if (start) start.focus({ preventScroll: true });
+    markStorySeen();
+    restoreMenu(panel);
   };
 
   next.addEventListener('click', () => {
@@ -153,7 +193,7 @@ function showStory() {
     }
     finishStory();
   });
-
+  skip?.addEventListener('click', finishStory, { once: true });
   render();
 }
 
@@ -162,137 +202,65 @@ function buildParty(scene) {
   const bg = scene.add.image(0, 0, 'world0').setOrigin(0).setDisplaySize(1280, 720).setTint(0xb889a3);
   const shade = scene.add.rectangle(640, 360, 1280, 720, 0x130c1c, .28);
   party.add([bg, shade]);
-
   const confetti = scene.add.graphics();
-  const pieces = [
-    [92,110,0xffd24a],[170,190,0x66d7ff],[262,100,0xff6b6b],[360,168,0x8cff80],
-    [470,86,0xff9bdd],[590,150,0xffd24a],[710,88,0x66d7ff],[820,175,0xff6b6b],
-    [930,104,0x8cff80],[1040,160,0xff9bdd],[1160,92,0xffd24a],[1220,210,0x66d7ff],
-  ];
+  const pieces = [[92,110,0xffd24a],[170,190,0x66d7ff],[262,100,0xff6b6b],[360,168,0x8cff80],[470,86,0xff9bdd],[590,150,0xffd24a],[710,88,0x66d7ff],[820,175,0xff6b6b],[930,104,0x8cff80],[1040,160,0xff9bdd],[1160,92,0xffd24a],[1220,210,0x66d7ff]];
   for (const [x,y,color] of pieces) confetti.fillStyle(color, .95).fillRect(x, y, 8, 18);
   party.add(confetti);
-
-  const headline = scene.add.text(640, 72, 'SURPRESA, GOKU!', {
-    fontFamily: 'Arial Black, Arial', fontSize: '48px', fontStyle: 'bold', color: '#fff4ba',
-    stroke: '#4b2030', strokeThickness: 8,
-  }).setOrigin(.5);
-  const sub = scene.add.text(640, 123, 'A energia misteriosa sempre esteve vindo dos seus amigos.', {
-    fontFamily: 'Arial', fontSize: '20px', color: '#ffffff', stroke: '#241429', strokeThickness: 4,
-  }).setOrigin(.5);
+  const headline = scene.add.text(640, 72, 'SURPRESA, GOKU!', {fontFamily:'Arial Black, Arial',fontSize:'48px',fontStyle:'bold',color:'#fff4ba',stroke:'#4b2030',strokeThickness:8}).setOrigin(.5);
+  const sub = scene.add.text(640, 123, 'A energia misteriosa sempre esteve vindo dos seus amigos.', {fontFamily:'Arial',fontSize:'20px',color:'#ffffff',stroke:'#241429',strokeThickness:4}).setOrigin(.5);
   party.add([headline, sub]);
-
   const hero = scene.add.sprite(245, 557, 'hero', 11).setOrigin(.5, 140/160).setScale(1.28);
   party.add(hero);
-
-  const friendData = [
-    { frame: 0, x: 760, label: 'VEGETA', scale: 1.23 },
-    { frame: 4, x: 935, label: 'PICCOLO', scale: 1.12 },
-    { frame: 8, x: 1085, label: 'KURIRIN', scale: 1.35 },
-  ];
+  const friendData = [{frame:0,x:760,label:'VEGETA',scale:1.23},{frame:4,x:935,label:'PICCOLO',scale:1.12},{frame:8,x:1085,label:'KURIRIN',scale:1.35}];
   for (const item of friendData) {
     const sprite = scene.add.sprite(item.x, 555, 'allies', item.frame).setOrigin(.5, 140/160).setScale(item.scale);
-    const label = scene.add.text(item.x, 400, item.label, {
-      fontFamily: 'Arial Black, Arial', fontSize: '16px', color: '#ffffff',
-      stroke: '#241429', strokeThickness: 4,
-    }).setOrigin(.5);
+    const label = scene.add.text(item.x, 400, item.label, {fontFamily:'Arial Black, Arial',fontSize:'16px',color:'#ffffff',stroke:'#241429',strokeThickness:4}).setOrigin(.5);
     party.add([sprite, label]);
   }
-
-  const more = scene.add.text(935, 620, 'GOHAN · BULMA · MESTRE KAME · E TODO MUNDO', {
-    fontFamily: 'Arial', fontSize: '14px', fontStyle: 'bold', color: '#ffeac2',
-    stroke: '#241429', strokeThickness: 3,
-  }).setOrigin(.5);
+  const more = scene.add.text(935, 620, 'GOHAN · BULMA · MESTRE KAME · E TODO MUNDO', {fontFamily:'Arial',fontSize:'14px',fontStyle:'bold',color:'#ffeac2',stroke:'#241429',strokeThickness:3}).setOrigin(.5);
   party.add(more);
-
   const cake = scene.add.graphics();
   cake.fillStyle(0xf5c27a).fillRoundedRect(515, 502, 215, 70, 14);
   cake.fillStyle(0xfff2db).fillRoundedRect(515, 490, 215, 32, 14);
   cake.fillStyle(0xff6d70).fillCircle(555, 505, 8).fillCircle(620, 505, 8).fillCircle(685, 505, 8);
-  for (const x of [550,590,630,670,710]) {
-    cake.fillStyle(0xffe173).fillRect(x, 458, 5, 34);
-    cake.fillStyle(0xff9138).fillCircle(x + 2, 453, 5);
-  }
+  for (const x of [550,590,630,670,710]) { cake.fillStyle(0xffe173).fillRect(x, 458, 5, 34); cake.fillStyle(0xff9138).fillCircle(x + 2, 453, 5); }
   party.add(cake);
-
   return party;
 }
 
 async function beginEnding(scene) {
-  const overlay = $('ending-overlay');
-  const panel = $('panel');
-  const hud = $('hud');
-  const ki = $('ki-button');
-  const loading = $('ending-loading');
-  const dialogue = $('ending-dialogue');
-  const replay = $('ending-replay');
+  const overlay = $('ending-overlay'), panel = $('panel'), hud = $('hud'), ki = $('ki-button');
+  const loading = $('ending-loading'), dialogue = $('ending-dialogue'), replay = $('ending-replay');
   if (!overlay || !panel) return null;
-
-  panel.style.display = 'none';
-  hud.hidden = true;
-  ki.hidden = true;
-  scene.world.setAlpha(0);
-
+  panel.style.display = 'none';hud.hidden = true;ki.hidden = true;scene.world.setAlpha(0);
   const runScene = scene.add.container(0, 0).setDepth(5000);
   const bg = scene.add.image(0, 0, 'world4').setOrigin(0).setDisplaySize(1280, 720);
   const tint = scene.add.rectangle(640, 360, 1280, 720, 0x16090d, .18);
-  const caption = scene.add.text(640, 110, 'A energia estava logo à frente…', {
-    fontFamily: 'Arial Black, Arial', fontSize: '28px', color: '#ffffff',
-    stroke: '#1a0d11', strokeThickness: 5,
-  }).setOrigin(.5);
+  const caption = scene.add.text(640, 110, 'A energia estava logo à frente…', {fontFamily:'Arial Black, Arial',fontSize:'28px',color:'#ffffff',stroke:'#1a0d11',strokeThickness:5}).setOrigin(.5);
   const runner = scene.add.sprite(170, 560, 'hero', 0).setOrigin(.5, 140/160).setScale(1.1);
-  runner.play('run', true); runner.anims.timeScale = 1.15;
-  runScene.add([bg, tint, caption, runner]);
-
-  await new Promise(resolve => scene.tweens.add({
-    targets: runner, x: 1390, duration: 2100, ease: 'Sine.easeIn', onComplete: resolve,
-  }));
+  runner.play('run', true);runner.anims.timeScale = 1.15;runScene.add([bg, tint, caption, runner]);
+  await new Promise(resolve => scene.tweens.add({targets:runner,x:1390,duration:2100,ease:'Sine.easeIn',onComplete:resolve}));
   runScene.destroy(true);
-
-  overlay.hidden = false;
-  overlay.dataset.mode = 'loading';
-  loading.hidden = false;
-  dialogue.hidden = true;
-  await sleep(1250);
-
-  loading.hidden = true;
-  overlay.dataset.mode = 'party';
-  dialogue.hidden = false;
-  const party = buildParty(scene);
-
-  const onReplay = () => {
-    replay.removeEventListener('click', onReplay);
-    party.destroy(true);
-    overlay.hidden = true;
-    overlay.dataset.mode = '';
-    dialogue.hidden = true;
-    panel.style.display = '';
-    scene.world.setAlpha(1);
-    scene.startRun();
-  };
-  replay.addEventListener('click', onReplay);
-  return party;
+  overlay.hidden = false;overlay.dataset.mode = 'loading';loading.hidden = false;dialogue.hidden = true;await sleep(1250);
+  loading.hidden = true;overlay.dataset.mode = 'party';dialogue.hidden = false;const party = buildParty(scene);
+  const onReplay = () => { replay.removeEventListener('click', onReplay);party.destroy(true);overlay.hidden = true;overlay.dataset.mode = '';dialogue.hidden = true;panel.style.display = '';scene.world.setAlpha(1);scene.startRun(); };
+  replay.addEventListener('click', onReplay);return party;
 }
 
 async function bootStoryRuntime() {
   if (qaMode) return;
-
   await waitForMenuReady();
-  showStory();
+  if (hasSeenStory()) unlockStoryGate();
+  else showStory();
 
   const scene = await waitForScene();
   let endingStarted = false;
   const watch = () => {
-    if (!endingStarted && scene.model?.state === 'victory') {
-      endingStarted = true;
-      beginEnding(scene).catch(console.error);
-    }
+    if (!endingStarted && scene.model?.state === 'victory') { endingStarted = true;beginEnding(scene).catch(console.error); }
     if (scene.model?.state === 'playing') endingStarted = false;
     requestAnimationFrame(watch);
   };
   watch();
 }
 
-bootStoryRuntime().catch(error => {
-  console.error(error);
-  unlockStoryGate();
-});
+bootStoryRuntime().catch(error => { console.error(error);unlockStoryGate(); });

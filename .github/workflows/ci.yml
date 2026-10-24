@@ -14,7 +14,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,13 +25,10 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Gate A - Logic and physics
+        run: npm ci && npm test
 
-      - name: Run tests
-        run: npm test
-
-      - name: Build production bundle
+      - name: Gate B - Production build
         run: npm run build
 
       - name: Locate Chrome
@@ -41,7 +38,7 @@ jobs:
           test -n "$CHROME_BIN"
           echo "CHROME_PATH=$CHROME_BIN" >> "$GITHUB_ENV"
 
-      - name: Start preview server
+      - name: Start production preview
         shell: bash
         run: |
           npm run preview -- --host 127.0.0.1 > /tmp/goku-run-preview.log 2>&1 &
@@ -54,17 +51,22 @@ jobs:
           cat /tmp/goku-run-preview.log
           exit 1
 
-      - name: Run story flow smoke test
+      - name: Gate C - Story and navigation
         env:
           TEST_URL: http://127.0.0.1:4173/
         run: npm run test:story
 
-      - name: Run visual regression audit
+      - name: Gate D - Sprite and animation render contract
+        env:
+          TEST_URL: http://127.0.0.1:4173/
+        run: npm run test:render
+
+      - name: Gate E - Terrain continuity and flicker
         env:
           TEST_URL: http://127.0.0.1:4173/
         run: npm run test:visual
 
-      - name: Run mobile smoke test
+      - name: Gate F - Mobile smoke
         env:
           TEST_URL: http://127.0.0.1:4173/
         run: npm run test:mobile
