@@ -27,7 +27,7 @@ Nenhum aparelho estava conectado durante a validação. Desempenho, som e retoma
 
 ## Implementação
 
-[js/main.js](js/main.js) usa Phaser para exibição, animações, áudio e entrada, além da integração Android. [js/game.js](js/game.js) preserva o modelo determinístico com física a 120 Hz; seu renderizador Canvas anterior não é iniciado. Não foi substituída a física por Arcade Physics.
+[js/main.js](js/main.js) usa Phaser para exibição, animações, áudio e entrada, além da integração Android. [js/game.js](js/game.js) preserva o modelo determinístico; no runtime o Phaser avança a simulação em passo fixo de 60 Hz, com catch-up limitado para impedir espirais de travamento quando um frame atrasa. O renderizador Canvas anterior não é iniciado, e a física continua própria, sem Arcade Physics.
 
 Goku usa uma nova folha de quadros completos: oito de corrida e quatro de salto, com mesma escala e pivôs explícitos. Não há membros separados. O chão foi preservado, com deslocamento contínuo e máscara de buracos. Impactos usam partículas e som, sem congelar o mundo.
 
