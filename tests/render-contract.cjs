@@ -90,6 +90,8 @@ const assert = require('node:assert/strict');
       };
     });
 
+    console.log('RENDER_CONTRACT', JSON.stringify(result));
+
     for (const [name, value] of Object.entries({ hero: result.hero, soldier: result.soldier, flyer: result.flyer })) {
       assert.ok(value.maxAlpha >= 245, `${name} precisa conter pixels realmente opacos`);
       assert.ok(value.visiblePixels >= 300, `${name} precisa ter área visual suficiente`);
