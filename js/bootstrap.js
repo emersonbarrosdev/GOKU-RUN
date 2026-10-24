@@ -1,4 +1,4 @@
-// Ordem explícita: núcleo -> configuração visual v9 -> narrativa -> Phaser.
+// Ordem explícita: núcleo -> configuração visual v13 -> narrativa -> Phaser.
 //
 // A narrativa precisa registrar o bloqueio do botão/teclado ANTES de main.js
 // criar a cena. Assim o jogador nunca consegue entrar na corrida antes da
