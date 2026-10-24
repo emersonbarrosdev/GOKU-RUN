@@ -122,10 +122,27 @@ function showStory() {
   const finishStory = () => {
     stopPreview();
     overlay.hidden = true;
-    panel.style.visibility = '';
-    unlockStoryGate();
+
+    // Não dependa de um próximo frame do Phaser para restaurar o menu. A
+    // transição narrativa -> menu deve ser completa e síncrona.
+    panel.hidden = false;
+    panel.dataset.mode = 'menu';
+    panel.style.display = '';
+    panel.style.visibility = 'visible';
+
     const start = $('start-button');
-    if (start && !start.hidden) start.focus({ preventScroll: true });
+    if (start) {
+      start.hidden = false;
+      start.textContent = 'JOGAR';
+      start.removeAttribute('aria-hidden');
+    }
+    const hud = $('hud');
+    const ki = $('ki-button');
+    if (hud) hud.hidden = true;
+    if (ki) ki.hidden = true;
+
+    unlockStoryGate();
+    if (start) start.focus({ preventScroll: true });
   };
 
   next.addEventListener('click', () => {
@@ -259,12 +276,9 @@ async function beginEnding(scene) {
 async function bootStoryRuntime() {
   if (qaMode) return;
 
-  // A introdução depende apenas de o menu DOM estar pronto. Ela não depende da
-  // descoberta da Scene Phaser e, portanto, não pode desaparecer por timing.
   await waitForMenuReady();
   showStory();
 
-  // A Scene só é necessária para observar a vitória e construir o encerramento.
   const scene = await waitForScene();
   let endingStarted = false;
   const watch = () => {
