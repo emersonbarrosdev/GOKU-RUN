@@ -6,14 +6,22 @@ import '../css/mobile.css';
 
 const C=window.GokuCore,{Game,Player,Track,Assets,PATHS,SFX,GROUND}=C;
 const $=id=>document.getElementById(id);
+const FIXED_STEP=1/60,MAX_CATCH_UP_STEPS=3,MAX_FRAME_DELTA=FIXED_STEP*MAX_CATCH_UP_STEPS;
 const ui={hud:$('hud'),panel:$('panel'),title:$('panel-title'),subtitle:$('panel-subtitle'),start:$('start-button'),
   score:$('score'),result:$('result-score'),phase:$('phase-label'),name:$('phase-name'),progress:$('phase-fill'),
   ki:$('ki-button'),kiFill:$('ki-fill'),kiCaption:$('ki-caption'),kiLabel:$('ki-label'),banner:$('phase-banner')};
 const hearts=[...document.querySelectorAll('.lives span')],livesLabel=document.querySelector('.lives');
 const setText=(node,value)=>{if(node.textContent!==value)node.textContent=value;};
+const setAttr=(node,name,value)=>{if(node.getAttribute(name)!==value)node.setAttribute(name,value);};
+const setWidth=(node,value)=>{if(node.style.width!==value)node.style.width=value;};
 
 class RunnerScene extends Phaser.Scene {
-  constructor(){super('runner');this.accumulator=0;this.views=new Map();this.lastState='';}
+  constructor(){
+    super('runner');
+    this.accumulator=0;this.views=new Map();this.lastState='';
+    this.aliveViews=new Set();this.maskSegments=[];this.particleColors=new Map();
+    this.backgroundWidths=C.PANELS.map(([, ,w,h])=>w*720/h);
+  }
   preload(){
     for(const [key,url] of Object.entries(PATHS))this.load.image(key,url);
     for(const [key,file] of Object.entries(SFX))this.load.audio('sfx-'+key,'./assets/sfx/'+file+'.wav');
@@ -36,8 +44,8 @@ class RunnerScene extends Phaser.Scene {
     this.world=this.add.container(0,0);
     this.background=this.add.image(0,0,'world0').setOrigin(0);this.previous=this.add.image(0,0,'world0').setOrigin(0);
     this.world.add([this.background,this.previous]);
-    // Recycle immutable images offscreen: no NPOT resampling, UV wrap, texture
-    // re-upload or on-screen reset when the next strip replaces the previous one.
+    // Keep one geometry mask and move it with the world. Rebuilding stencil
+    // geometry every frame caused avoidable GPU uploads and visible hitches.
     this.floorMask=this.make.graphics({x:0,y:0,add:false});
     const groundMask=this.floorMask.createGeometryMask();
     this.groundStrips=Array.from({length:3},()=>this.add.image(0,GROUND-3,'terrain-0').setOrigin(0).setMask(groundMask));
@@ -108,16 +116,42 @@ class RunnerScene extends Phaser.Scene {
   update(time,delta){
     if(!this.model)return;const g=this.model;
     if(g.state==='playing'){
-      this.accumulator+=Math.min(delta/1000,.075);
-      while(this.accumulator>=1/120){g.update(1/120);this.accumulator-=1/120;}
+      // 60 Hz is enough for this runner and cuts model/GC work in half. Clamp
+      // accumulated time so one slow frame cannot trigger a catch-up spiral.
+      const frameSeconds=Math.min(Math.max(delta,0)/1000,MAX_FRAME_DELTA);
+      this.accumulator=Math.min(this.accumulator+frameSeconds,MAX_FRAME_DELTA);
+      let steps=0;
+      while(this.accumulator>=FIXED_STEP&&steps<MAX_CATCH_UP_STEPS){
+        g.update(FIXED_STEP);this.accumulator-=FIXED_STEP;steps++;
+      }
+      if(steps===MAX_CATCH_UP_STEPS&&this.accumulator>=FIXED_STEP)this.accumulator=0;
     }else this.accumulator=0;
     this.renderWorld();this.syncUI();
+  }
+  syncGroundMask(segments,distance){
+    let changed=this.maskSegments.length!==segments.length;
+    if(!changed){
+      for(let i=0;i<segments.length;i++){
+        const cached=this.maskSegments[i],segment=segments[i];
+        if(cached.start!==segment.start||cached.end!==segment.end){changed=true;break;}
+      }
+    }
+    if(changed){
+      this.floorMask.clear().fillStyle(0xffffff);
+      for(const segment of segments)this.floorMask.fillRect(segment.start,GROUND-3,segment.end-segment.start,164);
+      this.maskSegments=segments.map(segment=>({start:segment.start,end:segment.end}));
+    }
+    this.floorMask.setPosition(-distance,0);
   }
   renderWorld(){
     const g=this.model,p=g.player,playing=g.state==='playing';
     this.menu.setVisible(g.state==='menu');this.world.setVisible(g.state!=='menu');
     if(g.state==='menu')return;
-    const placeBackground=(image,index,progress)=>{const size=C.PANELS[index],w=size[2]*720/size[3];if(image.texture.key!=='world'+index)image.setTexture('world'+index);image.setDisplaySize(w,720).setPosition(-(w-1280)*progress,0);};
+    const placeBackground=(image,index,progress)=>{
+      const key='world'+index,w=this.backgroundWidths[index];
+      if(image.texture.key!==key){image.setTexture(key);image.setDisplaySize(w,720);}
+      image.setPosition(-(w-1280)*progress,0);
+    };
     placeBackground(this.background,g.phaseIndex,Math.min(1,g.phaseTime/30));
     this.previous.setVisible(g.phaseFade>0);if(g.phaseFade>0){placeBackground(this.previous,g.previousPhase,1);this.previous.setAlpha(g.phaseFade);}
     const groundOffset=g.track.distance%840;
@@ -125,7 +159,7 @@ class RunnerScene extends Phaser.Scene {
       if(strip.texture.key!=='terrain-'+g.phaseIndex)strip.setTexture('terrain-'+g.phaseIndex);
       strip.setPosition(i*840-groundOffset,GROUND-3);
     });
-    this.floorMask.clear().fillStyle(0xffffff);for(const s of g.track.segments)this.floorMask.fillRect(s.start-g.track.distance,GROUND-3,s.end-s.start,164);
+    this.syncGroundMask(g.track.segments,g.track.distance);
     this.effects.clear();this.foreground.clear();
     for(let i=0;i<g.track.segments.length-1;i++){
       const left=g.track.segments[i].end-g.track.distance,right=g.track.segments[i+1].start-g.track.distance;if(right<0||left>1280)continue;
@@ -156,7 +190,7 @@ class RunnerScene extends Phaser.Scene {
     if(p.grounded&&p.landTime<=0){this.hero.play('run',true);this.hero.anims.timeScale=g.phase.speed/335;}
     else{this.hero.stop();this.hero.setFrame(8+p.frame);}
     if(!playing)this.hero.anims.pause();else if(this.hero.anims.isPaused)this.hero.anims.resume();
-    const alive=new Set();
+    const alive=this.aliveViews;alive.clear();
     const view=(entity,key)=>{alive.add(entity);let v=this.views.get(entity);if(!v){v=this.add.sprite(0,0,key,0).setOrigin(.5,140/160);this.world.add(v);this.world.bringToTop(this.foreground);this.labels.forEach(l=>this.world.bringToTop(l));this.views.set(entity,v);}return v;};
     for(const e of g.enemies){
       if(e.type==='blast'){
@@ -174,7 +208,11 @@ class RunnerScene extends Phaser.Scene {
     for(const f of g.friends){const v=view(f,'allies');v.setPosition(f.x,GROUND).setAlpha(f.touched?.6:1).play('ally-'+f.variant,true);if(!playing)v.anims.pause();else if(v.anims.isPaused)v.anims.resume();}
     for(const o of g.orbs){const v=view(o,'orb');v.setOrigin(.5).setDisplaySize(32,32).setPosition(o.x,o.y+Math.sin(o.age*4)*3);}
     for(const [entity,v] of this.views)if(!alive.has(entity)){v.destroy();this.views.delete(entity);}
-    for(const particle of g.particles)this.foreground.fillStyle(Phaser.Display.Color.HexStringToColor(particle.color).color,Math.min(1,particle.life*3)).fillRect(particle.x,particle.y,particle.size,particle.size);
+    for(const particle of g.particles){
+      let color=this.particleColors.get(particle.color);
+      if(color===undefined){color=Phaser.Display.Color.HexStringToColor(particle.color).color;this.particleColors.set(particle.color,color);}
+      this.foreground.fillStyle(color,Math.min(1,particle.life*3)).fillRect(particle.x,particle.y,particle.size,particle.size);
+    }
     for(const impact of g.groundImpacts){const age=1-impact.life/.22;this.foreground.lineStyle(2*(1-age),0xeadbb9,(1-age)*.45).strokeEllipse(impact.x,GROUND+2,32+age*80,4+age*6);}
     this.labels.forEach((label,i)=>{const m=g.messages[i];label.setVisible(!!m);if(m){if(label.text!==m.value)label.setText(m.value);label.setPosition(m.x,m.y).setColor(m.color).setAlpha(Math.min(1,m.life*2));}});
     if(g.flash>0)this.foreground.fillStyle(0xf8534e,g.flash).fillRect(0,0,1280,720);
@@ -191,19 +229,20 @@ class RunnerScene extends Phaser.Scene {
       $('instructions').textContent=matchMedia('(pointer:coarse)').matches?'Toque para pular · Toque outra vez no ar':'Espaço ou clique para pular · Pulo duplo';
     }
     setText(ui.score,String(Math.floor(g.score)).padStart(5,'0'));
-    hearts.forEach((node,i)=>node.classList.toggle('empty',i>=p.lives));livesLabel.setAttribute('aria-label',p.lives+' vidas');
+    hearts.forEach((node,i)=>node.classList.toggle('empty',i>=p.lives));setAttr(livesLabel,'aria-label',p.lives+' vidas');
     setText(ui.phase,'FASE '+(g.phaseIndex+1)+' / 5');setText(ui.name,g.phase.name);
-    ui.progress.style.width=Math.min(100,g.phaseTime/30*100)+'%';
-    ui.kiFill.style.width=(p.kiActive?p.kiTime/6*100:p.charge)+'%';
+    setWidth(ui.progress,Math.min(100,g.phaseTime/30*100).toFixed(2)+'%');
+    setWidth(ui.kiFill,(p.kiActive?p.kiTime/6*100:p.charge).toFixed(1)+'%');
     ui.ki.classList.toggle('ready',p.kiReady);ui.ki.classList.toggle('active',p.kiActive);
     setText(ui.kiLabel,p.kiActive?'×3':'KI');setText(ui.kiCaption,p.kiActive?'RESERVA '+Math.round(p.reserve)+'%':p.kiReady?'TOQUE AQUI':Math.round(p.charge)+'%');
-    ui.ki.setAttribute('aria-label',p.kiReady?'Ativar KI':p.kiActive?'KI ativo, pontos triplicados':'KI carregando '+Math.round(p.charge)+'%');
+    setAttr(ui.ki,'aria-label',p.kiReady?'Ativar KI':p.kiActive?'KI ativo, pontos triplicados':'KI carregando '+Math.round(p.charge)+'%');
     ui.banner.hidden=state!=='playing'||g.phaseBanner<=0;if(!ui.banner.hidden)setText(ui.banner,g.phase.name);
   }
 }
 
 const game=new Phaser.Game({type:Phaser.AUTO,parent:'game-container',width:1280,height:720,backgroundColor:'#102330',
-  render:{antialias:true,roundPixels:false,powerPreference:'low-power'},
+  render:{antialias:true,roundPixels:true,powerPreference:'high-performance'},
+  fps:{target:60,min:30,forceSetTimeOut:false,smoothStep:true},
   scale:{mode:Phaser.Scale.FIT,autoCenter:Phaser.Scale.CENTER_BOTH},
   input:{activePointers:2},audio:{disableWebAudio:false},scene:RunnerScene});
 // The CSS stage changes with safe areas and device rotation, independently of
