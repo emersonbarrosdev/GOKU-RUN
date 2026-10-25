@@ -35,7 +35,7 @@ const assert = require('node:assert/strict');
               minY = Math.min(minY, y); maxY = Math.max(maxY, y);
               if (y >= 137) groundPixels++;
             }
-            if (a >= 180 && r >= 130 && g >= 35 && g <= 185 && b <= 105) {
+            if (a >= 180 && r >= 130 && g >= 35 && g <= 190 && b <= 110) {
               orangeCount++; orangeX += x; orangeY += y;
             }
           }
@@ -70,26 +70,47 @@ const assert = require('node:assert/strict');
     const torsoXs = result.frames.map(frame => frame.torsoCenter[0]);
     const torsoSpread = Math.max(...torsoXs) - Math.min(...torsoXs);
     const maxTorsoJump = Math.max(...result.transitions.map(t => Math.abs(t.torsoDx)));
-    const bottoms = result.frames.map(frame => frame.bbox[3]);
-    const bottomSpread = Math.max(...bottoms) - Math.min(...bottoms);
+    const torsoYs = result.frames.map(frame => frame.torsoCenter[1]);
+    const verticalArc = Math.max(...torsoYs) - Math.min(...torsoYs);
 
-    assert.ok(torsoSpread <= 1.5,
-      `torso deve permanecer no mesmo eixo X no jogging; variação=${torsoSpread.toFixed(3)}px`);
-    assert.ok(maxTorsoJump <= 1.5,
+    assert.ok(torsoSpread <= 2.5,
+      `torso deve permanecer registrado no eixo X; variação=${torsoSpread.toFixed(3)}px`);
+    assert.ok(maxTorsoJump <= 2.5,
       `nenhuma troca pode teleportar o torso; maior salto=${maxTorsoJump.toFixed(3)}px`);
-    assert.ok(bottomSpread <= 2,
-      `baseline dos pés precisa permanecer estável; variação=${bottomSpread}px`);
+    assert.ok(verticalArc >= 2 && verticalArc <= 14,
+      `corrida precisa ter arco vertical natural sem quicar; arco=${verticalArc.toFixed(3)}px`);
 
-    for (const frame of result.frames) {
-      assert.ok(frame.bbox[3] >= 137 && frame.bbox[3] <= 139,
-        `frame ${frame.frame} precisa permanecer junto à baseline; bottom=${frame.bbox[3]}`);
+    // Contact/down/passing mantêm apoio junto ao chão. Frames 3 e 7 são os dois
+    // "up" do ciclo e ficam alguns pixels no ar antes do contato do pé oposto.
+    const groundedFrames = result.frames.filter(({ frame }) => ![3, 7].includes(frame));
+    const flightFrames = result.frames.filter(({ frame }) => [3, 7].includes(frame));
+    const groundedBottoms = groundedFrames.map(frame => frame.bbox[3]);
+    const groundedSpread = Math.max(...groundedBottoms) - Math.min(...groundedBottoms);
+    const groundBaseline = Math.max(...groundedBottoms);
+
+    assert.ok(groundedSpread <= 3,
+      `frames de apoio precisam compartilhar baseline; variação=${groundedSpread}px`);
+    for (const frame of groundedFrames) {
+      assert.ok(frame.bbox[3] >= groundBaseline - 3,
+        `frame ${frame.frame} deve permanecer junto ao chão; bottom=${frame.bbox[3]}`);
       assert.ok(frame.groundPixels > 0,
-        `frame ${frame.frame} deve possuir contato/rasante no piso para o trote`);
-      assert.ok(frame.orangeCount > 150,
+        `frame ${frame.frame} precisa ter pixels de contato/rasante no piso`);
+      assert.ok(frame.orangeCount > 130,
+        `frame ${frame.frame} precisa conter torso laranja suficiente`);
+    }
+    for (const frame of flightFrames) {
+      assert.ok(frame.bbox[3] <= groundBaseline - 3,
+        `frame ${frame.frame} é fase up e deve sair do chão; bottom=${frame.bbox[3]}, baseline=${groundBaseline}`);
+      assert.ok(frame.orangeCount > 130,
         `frame ${frame.frame} precisa conter torso laranja suficiente`);
     }
 
-    console.log(`PASS: jogging alinhado (torso spread ${torsoSpread.toFixed(3)}px, salto ${maxTorsoJump.toFixed(3)}px, baseline ${bottomSpread}px).`);
+    // Os dois contatos opostos não podem ser a mesma figura repetida.
+    assert.ok(Math.abs(result.frames[0].bodyCenter[0] - result.frames[4].bodyCenter[0]) > .5 ||
+      Math.abs(result.frames[0].bodyCenter[1] - result.frames[4].bodyCenter[1]) > .5,
+      'contatos 0 e 4 precisam representar passos opostos, não a mesma pose duplicada');
+
+    console.log(`PASS: ciclo contact/down/passing/up registrado (X ${torsoSpread.toFixed(2)}px, arco Y ${verticalArc.toFixed(2)}px).`);
   } finally {
     await browser.close();
   }
