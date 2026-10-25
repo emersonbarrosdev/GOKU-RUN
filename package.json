@@ -3,9 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "materialize:goku": "node tools/materialize-goku-grid.cjs",
+    "predev": "npm run materialize:goku",
     "dev": "vite --host 0.0.0.0",
+    "prebuild": "npm run materialize:goku",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
+    "pretest": "npm run materialize:goku",
     "test": "node --require ./js/goku-visual-config.cjs --test tests/game.test.cjs tests/runtime-step.test.cjs && node --require ./js/goku-visual-config.cjs tests/playthrough.cjs",
     "test:browser": "node tests/browser-review.cjs",
     "test:mobile": "node tests/mobile-smoke.cjs",
