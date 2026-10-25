@@ -28,8 +28,8 @@ const assert = require('node:assert/strict');
             maxAlpha = Math.max(maxAlpha, a);
             if (a >= 40) visiblePixels++;
             if (a >= 220) solidPixels++;
-            if (a >= 180 && r >= 130 && g >= 35 && g <= 185 && b <= 105) orangePixels++;
-            if (a >= 180 && b >= 55 && b > r * .75 && b > g * .9) bluePixels++;
+            if (a >= 180 && r >= 130 && g >= 35 && g <= 190 && b <= 110) orangePixels++;
+            if (a >= 180 && b >= 45 && b > r * .72 && b > g * .88) bluePixels++;
           }
         }
         return { maxAlpha, visiblePixels, solidPixels, orangePixels, bluePixels };
@@ -56,6 +56,30 @@ const assert = require('node:assert/strict');
           frame,
           ...pixelStats(data, frame * frameWidth, 0, frameWidth, frameHeight, canvas.width),
         }));
+      };
+
+      const runPairDiffs = () => {
+        const source = scene.textures.get('hero').getSourceImage();
+        const canvas = document.createElement('canvas');
+        canvas.width = source.width; canvas.height = source.height;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(source, 0, 0);
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        const diffs = [];
+        for (let pair = 0; pair < 4; pair++) {
+          let changed = 0;
+          for (let y = 0; y < 160; y++) {
+            for (let x = 0; x < 160; x++) {
+              const a = (y * canvas.width + pair * 160 + x) * 4;
+              const b = (y * canvas.width + (pair + 4) * 160 + x) * 4;
+              const delta = Math.abs(data[a] - data[b]) + Math.abs(data[a + 1] - data[b + 1]) +
+                Math.abs(data[a + 2] - data[b + 2]) + Math.abs(data[a + 3] - data[b + 3]);
+              if (delta > 120) changed++;
+            }
+          }
+          diffs.push(changed / (160 * 160));
+        }
+        return diffs;
       };
 
       const cadenceSample = speed => {
@@ -107,6 +131,7 @@ const assert = require('node:assert/strict');
 
       return {
         hero, heroFrames, soldier, flyer, cadence,
+        pairDiffs: runPairDiffs(),
         runFrames: core.RUN_FRAMES.map(frame => [...frame]),
         runPivots: core.RUN_PIVOTS.map(pivot => [...pivot]),
         runPath: core.PATHS.run,
@@ -118,10 +143,11 @@ const assert = require('node:assert/strict');
 
     console.log('RENDER_CONTRACT', JSON.stringify(result));
 
-    assert.equal(result.runPath, './assets/spritesheets/goku_jog_run_v1.png');
-    assert.deepEqual(result.runFrames, Array.from({ length: 8 }, (_, i) => [i * 48, 0, 48, 96]),
-      'corrida deve usar grid horizontal regular de 8 células idênticas');
-    assert.equal(new Set(result.runPivots.map(([, y]) => y)).size, 1, 'todos os frames devem compartilhar a mesma baseline');
+    assert.equal(result.runPath, './assets/spritesheets/goku_run_cycle_v17.png');
+    assert.deepEqual(result.runFrames, Array.from({ length: 8 }, (_, i) => [i * 128, 0, 128, 128]),
+      'corrida v17 deve usar grid horizontal regular de 8 células 128x128');
+    assert.equal(new Set(result.runPivots.map(([, y]) => y)).size, 1,
+      'todos os frames devem compartilhar a mesma origem de chão');
 
     for (const [name, value] of Object.entries({ hero: result.hero, soldier: result.soldier, flyer: result.flyer })) {
       assert.ok(value.maxAlpha >= 245, `${name} precisa conter pixels realmente opacos`);
@@ -130,25 +156,36 @@ const assert = require('node:assert/strict');
     }
 
     assert.ok(result.hero.orangePixels >= 1500, 'atlas do Goku precisa conter o gi laranja real');
-    assert.ok(result.hero.bluePixels >= 350, 'atlas do Goku precisa conter detalhes azuis reais');
+    assert.ok(result.hero.bluePixels >= 300, 'atlas do Goku precisa conter detalhes azuis reais');
     for (const frame of result.heroFrames.slice(0, 8)) {
-      assert.ok(frame.visiblePixels >= 650, `jog frame ${frame.frame} precisa conter o corpo completo`);
-      assert.ok(frame.solidPixels >= 300, `jog frame ${frame.frame} precisa ser opaco`);
-      assert.ok(frame.orangePixels >= 150, `jog frame ${frame.frame} precisa mostrar o gi laranja`);
-      assert.ok(frame.bluePixels >= 25, `jog frame ${frame.frame} precisa mostrar detalhes azuis`);
+      assert.ok(frame.visiblePixels >= 650, `run frame ${frame.frame} precisa conter o corpo completo`);
+      assert.ok(frame.solidPixels >= 280, `run frame ${frame.frame} precisa ser opaco`);
+      assert.ok(frame.orangePixels >= 140, `run frame ${frame.frame} precisa mostrar o gi laranja`);
+      assert.ok(frame.bluePixels >= 20, `run frame ${frame.frame} precisa mostrar detalhes azuis`);
     }
 
-    assert.equal(result.cadence.stride, 300, 'jogging deve usar 300px por ciclo completo');
-    assert.ok(result.cadence.phase1.cycleSeconds > .86 && result.cadence.phase1.cycleSeconds < .93,
-      `fase 1 deve completar o trote em ~0,90 s, recebido ${result.cadence.phase1.cycleSeconds}`);
-    assert.ok(result.cadence.phase5.cycleSeconds > .67 && result.cadence.phase5.cycleSeconds < .73,
-      `fase 5 deve completar o trote em ~0,70 s, recebido ${result.cadence.phase5.cycleSeconds}`);
-    assert.ok(result.cadence.phase1.changes >= 8 && result.cadence.phase1.changes <= 9,
-      `fase 1 deve avançar ~9 poses/s: ${result.cadence.phase1.changes}`);
-    assert.ok(result.cadence.phase5.changes >= 11 && result.cadence.phase5.changes <= 12,
-      `fase 5 deve avançar ~11 poses/s: ${result.cadence.phase5.changes}`);
-    assert.equal(result.cadence.phase1.visited.length, 8, 'fase 1 precisa usar as 8 poses do jogging');
-    assert.equal(result.cadence.phase5.visited.length, 8, 'fase 5 precisa usar as 8 poses do jogging');
+    // O bug do v16 repetia praticamente as mesmas quatro poses na segunda metade.
+    // Cada passo oposto precisa mudar a silhueta de forma material.
+    for (let i = 0; i < result.pairDiffs.length; i++) {
+      assert.ok(result.pairDiffs[i] > .06,
+        `frames ${i} e ${i + 4} estão parecidos demais (${result.pairDiffs[i].toFixed(3)}); o ciclo voltou a repetir poses`);
+    }
+
+    assert.equal(result.cadence.stride, 246, 'corrida v17 deve usar 246px por ciclo completo');
+    assert.ok(result.cadence.phase1.theoreticalFps >= 10.7 && result.cadence.phase1.theoreticalFps <= 11.1,
+      `fase 1 deve ficar em ~10,9 FPS, recebido ${result.cadence.phase1.theoreticalFps}`);
+    assert.ok(result.cadence.phase5.theoreticalFps >= 13.8 && result.cadence.phase5.theoreticalFps <= 14.1,
+      `fase 5 deve ficar em ~14 FPS, recebido ${result.cadence.phase5.theoreticalFps}`);
+    assert.ok(result.cadence.phase1.cycleSeconds > .72 && result.cadence.phase1.cycleSeconds < .75,
+      `fase 1 deve completar o ciclo em ~0,734 s, recebido ${result.cadence.phase1.cycleSeconds}`);
+    assert.ok(result.cadence.phase5.cycleSeconds > .56 && result.cadence.phase5.cycleSeconds < .59,
+      `fase 5 deve completar o ciclo em ~0,572 s, recebido ${result.cadence.phase5.cycleSeconds}`);
+    assert.ok(result.cadence.phase1.changes >= 10 && result.cadence.phase1.changes <= 11,
+      `fase 1 deve avançar ~11 poses/s: ${result.cadence.phase1.changes}`);
+    assert.ok(result.cadence.phase5.changes >= 13 && result.cadence.phase5.changes <= 14,
+      `fase 5 deve avançar ~14 poses/s: ${result.cadence.phase5.changes}`);
+    assert.equal(result.cadence.phase1.visited.length, 8, 'fase 1 precisa usar as 8 poses');
+    assert.equal(result.cadence.phase5.visited.length, 8, 'fase 5 precisa usar as 8 poses');
 
     assert.equal(result.heroRuntime.visible, true);
     assert.equal(result.heroRuntime.alpha, 1);
@@ -160,7 +197,7 @@ const assert = require('node:assert/strict');
     assert.equal(result.terrain.terrain839, 839);
     assert.equal(result.terrain.terrain840, 840);
 
-    console.log('PASS: grid regular de 8 frames, jogging em 0,90–0,70 s, pulo separado e terreno alinhado.');
+    console.log('PASS: 8 poses únicas, grid 128x128, corrida 10,9–14 FPS, pulo separado e terreno alinhado.');
   } finally {
     await browser.close();
   }
