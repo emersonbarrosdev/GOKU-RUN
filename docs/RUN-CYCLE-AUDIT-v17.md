@@ -1,32 +1,34 @@
-# Auditoria de corrida v18
+# Auditoria de corrida v19
 
-Problema observado: o atlas de trote usava células de apenas 48 × 96 px, passada curta e oito poses com os pés praticamente colados ao chão. A cadência correta não conseguia compensar uma mecânica corporal incorreta, por isso o movimento continuava robótico.
+O defeito encontrado no atlas v10 não era falta de FPS: as duas metades do ciclo repetiam quase a mesma leitura de pernas. As poses de passagem continuavam abertas e não mostravam a mesma perna viajando da frente para trás.
 
-Correção alvo:
-- 8 poses distintas em grid 4 × 2, com células de 512 × 512 px;
-- ordem: contact L -> down L -> passing L -> flight L -> contact R -> down R -> passing R -> flight R;
+Correção aplicada:
+
+- 8 poses em grid 4 × 2, com células de 512 × 512 px;
+- ordem: contato A → apoio A → passagem → voo → contato B → apoio B → passagem → voo;
+- a perna próxima e a perna distante trocam frente/trás com oclusão correta no quadril;
 - braços em oposição às pernas;
+- uma única escala anatômica para os oito quadros, sem inflar poses recolhidas;
 - torso estabilizado no eixo X;
-- contatos atingem a baseline, passagens aliviam o apoio e voos ficam sem pixels no piso;
-- cadência dinâmica de ~10,5 a 13,5 FPS entre fase 1 e fase 5;
-- ciclo calculado pela distância percorrida (255 px), mantendo pernas e terreno sincronizados independentemente do FPS de renderização;
-- uma única escala anatômica para todos os frames, sem aumentar poses comprimidas;
-- cabelo, faixa e tecido com follow-through discreto;
-- pulo permanece separado;
-- CI deve reprovar regressões de ordem, jitter ou cadência.
+- contatos atingem a baseline, passagens aliviam o apoio e voos saem do piso;
+- cadência dinâmica de 10,51 a 13,49 FPS, calculada pela distância percorrida (255 px por ciclo);
+- pulo permanece em animação separada.
 
-## Critério de quantidade de frames
+## Quantidade de frames
 
-Oito frames são suficientes para este runner porque o personagem aparece com cerca de 108 px de altura e a câmera nunca aproxima. O ciclo precisa conter as quatro fases funcionais de cada lado; duplicar desenhos sem acrescentar novas fases não melhora a animação. Doze frames passam a valer a pena quando o personagem é maior na tela ou quando há orçamento para breakdowns intermediários desenhados individualmente.
+Oito quadros são suficientes para este runner porque Goku aparece com cerca de 108 px e não há zoom de câmera. O requisito é desenhar as quatro fases funcionais de cada lado; duplicar silhuetas não acrescenta suavidade. Doze quadros só passam a valer a pena com personagem maior ou breakdowns realmente novos.
 
-Não há crossfade entre sprites: misturar dois desenhos cria fantasma e perde leitura de silhueta. A suavidade vem de poses corretas, espaçamento coerente, pivô estável e cadência ligada à distância.
+Não há crossfade entre sprites. A suavidade vem da sequência biomecânica, do espaçamento, do pivô e da cadência ligada ao deslocamento.
 
 ## Resultado medido no runtime
 
-- variação horizontal do torso: 0,466 px;
-- maior deslocamento lateral entre quadros: 0,466 px;
-- contato/compressão: bottom 139 px;
-- passagem: bottom 137 px;
-- voo: bottom 134 px, sem pixels no piso;
-- menor diferença entre qualquer par de poses: 2.055 pixels;
+- variação horizontal do torso: 0,437 px;
+- maior transição horizontal do torso: 0,431 px;
+- contato: bottom 139 px;
+- passagem: bottom 137–138 px;
+- voo: bottom 133 px, sem pixels no piso;
+- menor diferença entre fases equivalentes dos dois lados: 1.936 pixels;
+- proporções equivalentes entre os dois lados dentro de 10 px na largura e 8 px na altura;
 - cadência: 10,51 FPS em Namek e 13,49 FPS na fase 5.
+
+O teste também reprova um atlas que duplique a primeira passada na segunda metade ou que deixe de recolher as pernas na passagem.

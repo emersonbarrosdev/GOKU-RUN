@@ -64,7 +64,21 @@ const assert = require('node:assert/strict');
         });
       }
 
-      return { uploadsPerSecond: uploads, seams };
+      g.track.distance = 500;
+      g.track.segments = [{ start: -500, end: 850 }, { start: 1000, end: 4000 }];
+      s.renderWorld();
+      const visibleCaps = s.groundEdgeViews.filter(view => view.visible).map(view => ({
+        x: view.x, y: view.y, key: view.texture.key,
+      }));
+      const caps = [];
+      for (let phase = 0; phase < 5; phase++) {
+        for (const side of ['left', 'right']) {
+          const source = s.textures.get(`terrain-cap-${side}-${phase}`).getSourceImage();
+          caps.push({ phase, side, width: source.width, height: source.height });
+        }
+      }
+
+      return { uploadsPerSecond: uploads, seams, caps, visibleCaps };
     });
 
     console.log('TERRAIN_RUNTIME', JSON.stringify(runtime));
@@ -74,6 +88,16 @@ const assert = require('node:assert/strict');
       assert.ok(seam.edgeDiff < 0.1, `phase ${seam.phase} tile edges must be seamless`);
       assert.ok(seam.mirrorDiff < 0.1, `phase ${seam.phase} mirrored center must be seamless`);
     }
+    assert.equal(runtime.caps.length, 10, 'tileset deve ter cantos esquerdo/direito nas cinco fases');
+    for (const cap of runtime.caps) {
+      assert.deepEqual([cap.width, cap.height], [40, 164],
+        `canto ${cap.side} da fase ${cap.phase} deve manter tamanho rígido`);
+    }
+    assert.deepEqual(runtime.visibleCaps.map(cap => cap.key).sort(),
+      ['terrain-cap-left-0', 'terrain-cap-right-0'],
+      'as duas bordas do buraco devem usar peças explícitas do tileset');
+    assert.ok(runtime.visibleCaps.every(cap => Number.isInteger(cap.x) && Number.isInteger(cap.y)),
+      'cantos do chão devem permanecer alinhados a pixels inteiros');
 
     // Freeze model updates but keep Phaser rendering. We only need three real
     // browser captures to prove the renderer crosses the 840px wrap cleanly.
@@ -134,7 +158,7 @@ const assert = require('node:assert/strict');
     assert.ok(wrap.after.mean < 0.1, 'terrain must move continuously out of the 840px wrap');
 
     await page.screenshot({ path: path.join(out, 'terrain-wrap-841.png') });
-    console.log('PASS: terrain textures are seamless in all five phases, zero runtime uploads, and browser wrap is continuous.');
+    console.log('PASS: middle tiles are seamless, left/right caps are pixel-aligned, zero runtime uploads, and browser wrap is continuous.');
   } finally {
     await browser.close();
   }

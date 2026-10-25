@@ -118,7 +118,7 @@ const assert = require('node:assert/strict');
 
     console.log('RENDER_CONTRACT', JSON.stringify(result));
 
-    assert.equal(result.runPath, './assets/spritesheets/goku_run_v10.png');
+    assert.equal(result.runPath, './assets/spritesheets/goku_run_v11.png');
     assert.deepEqual(result.runFrames, Array.from({ length: 8 }, (_, i) => [
       (i % 4) * 512, Math.floor(i / 4) * 512, 512, 512,
     ]), 'corrida deve usar grid 4x2 regular com oito poses completas');

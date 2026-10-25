@@ -2,15 +2,15 @@
 
 | Arquivo | Uso |
 | --- | --- |
-| [goku_run_v10.png](../assets/spritesheets/goku_run_v10.png) | 8 quadros de corrida: contato, compressão, passagem e voo para cada perna |
+| [goku_run_v11.png](../assets/spritesheets/goku_run_v11.png) | 8 quadros biomecânicos: contato, apoio, passagem e voo para cada perna |
 | [goku_stride_v8.png](../assets/spritesheets/goku_stride_v8.png) | 4 quadros de salto usados pelo runtime |
 | [enemies_fullbody_v7.png](../assets/spritesheets/enemies_fullbody_v7.png) | Corrida para esquerda, voo, carga e disparo |
-| [friends_motion_v4.png](../assets/spritesheets/friends_motion_v4.png) | 4 gestos por aliado; sem nomes |
-| [terrain_ground_v4.png](../assets/spritesheets/terrain_ground_v4.png) | Chão contínuo, pré-colorido por fase |
+| [friends_motion_v4.png](../assets/spritesheets/friends_motion_v4.png) | 4 gestos por aliado |
+| [terrain_ground_v4.png](../assets/spritesheets/terrain_ground_v4.png) | Fonte visual do chão, pré-colorida por fase no carregamento |
 | [ground_enemy_sheet.png](../assets/spritesheets/ground_enemy_sheet.png) | Cristal e rocha |
 | [menu_clean_v4.png](../assets/ui/menu_clean_v4.png) | Menu com botões HTML independentes |
 
-Panoramas separados, não pequenos recortes de um atlas:
+Panoramas separados:
 
 - [Namek](../assets/backgrounds/namek_panorama_v7.png): 2048 × 768.
 - [Floresta](../assets/backgrounds/forest_panorama_v7.png): 2170 × 725.
@@ -18,10 +18,18 @@ Panoramas separados, não pequenos recortes de um atlas:
 - [Cidade](../assets/backgrounds/city_panorama_v7.png): 2172 × 724.
 - [Vulcão](../assets/backgrounds/lava_panorama_v7.png): 2048 × 768.
 
-Recortes e pivôs ficam em [game.js](../js/game.js). Escala de Goku: `108/307` em corrida e salto. Poses encolhidas não são ampliadas por altura do recorte. A silhueta muda com a postura.
+Os recortes e pivôs finais ficam em [goku-visual-config.js](../js/goku-visual-config.js). A corrida usa uma única escala `108/321`; poses recolhidas não são ampliadas para preencher a célula.
 
-[main.js](../js/main.js) prepara células de 160 × 160 com quadros completos. A corrida usa oito quadros e acompanha a velocidade da fase. O salto seleciona quatro poses conforme a física. Aliados usam 0–1–2–3–2–1. Remoção de halo e preparação das texturas acontecem uma vez no carregamento.
+[main.js](../js/main.js) prepara células de 160 × 160 com quadros completos. A corrida acompanha a distância do mundo, o salto seleciona quatro poses pela física e toda preparação de textura ocorre uma vez no carregamento.
 
-O terreno repete textura de 840 px em coordenadas do mundo. A máscara abre somente buracos físicos, mostrando fundo e paredes. Cada panorama avança uma vez ao longo da fase.
+## Tileset do chão
 
-Folhas antigas, o experimento de membros separados e o atlas de baixa resolução não são carregados nem copiados para o APK. Documentos V4/V5 são históricos.
+O runtime usa três peças explícitas por fase:
+
+1. canto esquerdo de 40 × 164 px;
+2. meio repetível de 840 × 164 px;
+3. canto direito de 40 × 164 px.
+
+O meio é construído por espelhamento e tem pixels idênticos nas duas emendas. O deslocamento usa `Math.floor(distance)` e os cantos também recebem coordenadas inteiras. A máscara geométrica das plataformas é independente da imagem: ela abre os buracos físicos, enquanto os cantos apenas desenham o acabamento. Assim, a altura da arte não interfere na colisão.
+
+Folhas antigas e o atlas de baixa resolução não são carregados pelo jogo.

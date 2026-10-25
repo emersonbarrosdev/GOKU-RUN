@@ -95,6 +95,13 @@ const assert = require('node:assert/strict');
     const contactBottom = Math.max(...contactFrames.map(frame => frame.bbox[3]));
     const flightBottom = Math.max(...flightFrames.map(frame => frame.bbox[3]));
     const minimumPoseDifference = Math.min(...result.differences.map(pair => pair.changedPixels));
+    const oppositePhaseDifferences = [[0, 4], [1, 5], [2, 6], [3, 7]].map(([from, to]) =>
+      result.differences.find(pair => pair.from === from && pair.to === to).changedPixels);
+    const boxSize = frame => ({
+      width: frame.bbox[2] - frame.bbox[0],
+      height: frame.bbox[3] - frame.bbox[1],
+    });
+    const phasePairs = [[0, 4], [1, 5], [2, 6], [3, 7]].map(pair => pair.map(i => boxSize(result.frames[i])));
 
     assert.ok(torsoSpread <= 1,
       `torso deve permanecer no mesmo eixo X na corrida; variação=${torsoSpread.toFixed(3)}px`);
@@ -104,6 +111,24 @@ const assert = require('node:assert/strict');
       `a corrida precisa de fase aérea real; contato=${contactBottom}px, voo=${flightBottom}px`);
     assert.ok(minimumPoseDifference >= 1000,
       `todos os frames devem ser poses visualmente distintas; menor diferença=${minimumPoseDifference}px`);
+    assert.ok(Math.min(...oppositePhaseDifferences) >= 1800,
+      `a segunda passada não pode repetir a primeira; menor diferença entre lados=${Math.min(...oppositePhaseDifferences)}px`);
+
+    // As duas pernas executam as mesmas quatro fases em lados opostos sem o
+    // corpo mudar de tamanho. Isso detecta tanto atlas duplicado quanto perna
+    // que fica presa para sempre na frente/atrás.
+    const tolerances = [{ width: 3, height: 2 }, { width: 10, height: 4 },
+      { width: 7, height: 3 }, { width: 4, height: 8 }];
+    phasePairs.forEach(([a, b], index) => {
+      assert.ok(Math.abs(a.width - b.width) <= tolerances[index].width,
+        `fases opostas ${index} devem manter proporção horizontal: ${a.width}px/${b.width}px`);
+      assert.ok(Math.abs(a.height - b.height) <= tolerances[index].height,
+        `fases opostas ${index} devem manter proporção vertical: ${a.height}px/${b.height}px`);
+    });
+    const contactWidth = (boxSize(result.frames[0]).width + boxSize(result.frames[4]).width) / 2;
+    const passingWidth = (boxSize(result.frames[2]).width + boxSize(result.frames[6]).width) / 2;
+    assert.ok(contactWidth - passingWidth >= 20,
+      `passagem precisa recolher as pernas entre contatos; contato=${contactWidth}px, passagem=${passingWidth}px`);
 
     for (const frame of contactFrames) {
       assert.ok(frame.bbox[3] >= 138 && frame.bbox[3] <= 140,
@@ -125,7 +150,7 @@ const assert = require('node:assert/strict');
         `frame ${frame.frame} precisa conter o gi laranja`);
     }
 
-    console.log(`PASS: corrida alinhada com contato/passagem/voo (torso ${torsoSpread.toFixed(3)}px, salto lateral ${maxTorsoJump.toFixed(3)}px, contato ${contactBottom}px, voo ${flightBottom}px, diferença mínima ${minimumPoseDifference}px).`);
+    console.log(`PASS: corrida alterna as duas pernas com proporção estável (torso ${torsoSpread.toFixed(3)}px, contato ${contactBottom}px, voo ${flightBottom}px, diferença oposta mínima ${Math.min(...oppositePhaseDifferences)}px).`);
   } finally {
     await browser.close();
   }

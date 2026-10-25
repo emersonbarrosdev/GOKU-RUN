@@ -1,10 +1,10 @@
-// Node preload: espelha paths, grid e pivôs visuais v16.
+// Node preload: espelha paths, grid e pivôs visuais v19.
 // O Node não renderiza pixels; os gates de navegador validam a escala real.
 const C = require('./game.js');
 const replace = (target, values) => target.splice(0, target.length, ...values);
 
 Object.assign(C.PATHS, {
-  run: './assets/spritesheets/goku_run_v10.png',
+  run: './assets/spritesheets/goku_run_v11.png',
   jump: './assets/spritesheets/goku_stride_v8.png',
 });
 
@@ -23,14 +23,14 @@ replace(C.JUMP_FRAMES, [
 ]);
 
 replace(C.RUN_PIVOTS, [
-  [245,416],
-  [768,411],
-  [1279,418],
-  [1803,420],
-  [262,923],
-  [776,925],
-  [1286,931],
-  [1791,932],
+  [259,416],
+  [781,411],
+  [1297,419],
+  [1801,418],
+  [265,924],
+  [795,924],
+  [1300,933],
+  [1810,908],
 ]);
 
 replace(C.JUMP_PIVOTS, [

@@ -50,6 +50,11 @@ class RunnerScene extends Phaser.Scene {
     const groundMask=this.floorMask.createGeometryMask();
     this.terrain=this.add.tileSprite(0,GROUND-3,1280,164,'terrain-0').setOrigin(0).setMask(groundMask);
     this.world.add(this.terrain);
+    // Pool fixo para os cantos do tileset. As imagens são reposicionadas em
+    // coordenadas inteiras; nenhuma textura é criada durante o gameplay.
+    this.groundEdgeViews=Array.from({length:16},()=>this.add.image(0,GROUND-3,'terrain-cap-left-0')
+      .setOrigin(0).setVisible(false));
+    this.world.add(this.groundEdgeViews);
     this.effects=this.add.graphics();this.world.add(this.effects);
     this.hero=this.add.sprite(235,GROUND,'hero',0).setOrigin(.5,140/160);this.world.add(this.hero);
     this.foreground=this.add.graphics();this.world.add(this.foreground);
@@ -87,6 +92,10 @@ class RunnerScene extends Phaser.Scene {
     C.FRIEND_FRAMES.forEach((bounds,i)=>{const variant=Math.floor(i/4),h=bounds[3]/[393,474,306][variant]*[101,122,72][variant];this.art.sprite(ac,'friends',bounds,i*160+80,140,h);});
     const allyTexture=this.textures.addCanvas('allies',allies);C.FRIEND_FRAMES.forEach((_,i)=>allyTexture.add(i,0,i*160,0,160,160));
     this.art.groundTiles.forEach((tile,i)=>this.textures.addCanvas('terrain-'+i,tile));
+    this.art.groundCaps.forEach((caps,i)=>{
+      this.textures.addCanvas('terrain-cap-left-'+i,caps.left);
+      this.textures.addCanvas('terrain-cap-right-'+i,caps.right);
+    });
     for(const [name,bounds] of [['crystal',[1109,627,341,372]],['boulder',[1627,690,329,308]]])this.textures.get('ground').add(name,0,...bounds);
     const orb=document.createElement('canvas');orb.width=48;orb.height=48;const oc=orb.getContext('2d');
     const glow=oc.createRadialGradient(20,18,1,24,24,23);glow.addColorStop(0,'#fffce3');glow.addColorStop(.42,'#ffdd76');glow.addColorStop(.65,'#ed982c');glow.addColorStop(1,'rgba(255,190,60,0)');oc.fillStyle=glow;oc.fillRect(0,0,48,48);this.textures.addCanvas('orb',orb);
@@ -156,6 +165,19 @@ class RunnerScene extends Phaser.Scene {
     if(this.terrain.displayTexture.key!==terrainKey)this.terrain.setTexture(terrainKey);
     this.terrain.tilePositionX=Math.floor(g.track.distance);
     this.syncGroundMask(g.track.segments,g.track.distance);
+    let edgeView=0;
+    for(const view of this.groundEdgeViews)view.setVisible(false);
+    const placeEdge=(side,worldX)=>{
+      const screenX=Math.floor(worldX-g.track.distance)-(side==='right'?40:0);
+      if(screenX<=-40||screenX>=1280||edgeView>=this.groundEdgeViews.length)return;
+      this.groundEdgeViews[edgeView++]
+        .setTexture('terrain-cap-'+side+'-'+g.phaseIndex)
+        .setPosition(screenX,GROUND-3).setVisible(true);
+    };
+    for(const segment of g.track.segments){
+      placeEdge('left',segment.start);
+      placeEdge('right',segment.end);
+    }
     this.effects.clear();this.foreground.clear();
     for(let i=0;i<g.track.segments.length-1;i++){
       const left=g.track.segments[i].end-g.track.distance,right=g.track.segments[i+1].start-g.track.distance;if(right<0||left>1280)continue;

@@ -1,4 +1,4 @@
-// Visual v16: jogging/trote em grid regular, PNG transparente e pivô de torso estável.
+// Visual v19: ciclo biomecânico completo em grid regular, PNG transparente e pivô estável.
 // Este arquivo roda DEPOIS de game.js e ANTES de main.js.
 const C = window.GokuCore;
 if (!C) throw new Error('GokuCore não inicializado antes do visual-config');
@@ -8,7 +8,7 @@ const replace = (target, values) => target.splice(0, target.length, ...values);
 // Corrida de produção em grid 4x2: 8 poses biomecânicas completas.
 // O pulo continua no atlas anterior, separado da corrida.
 Object.assign(C.PATHS, {
-  run: './assets/spritesheets/goku_run_v10.png',
+  run: './assets/spritesheets/goku_run_v11.png',
   jump: './assets/spritesheets/goku_stride_v8.png',
 });
 
@@ -29,14 +29,14 @@ replace(C.JUMP_FRAMES, [
 // Pivô horizontal comum estabiliza quadril/torso. O eixo Y preserva contato,
 // compressão, passagem e voo: os frames 3/7 ficam realmente fora do chão.
 replace(C.RUN_PIVOTS, [
-  [245,416],
-  [768,411],
-  [1279,418],
-  [1803,420],
-  [262,923],
-  [776,925],
-  [1286,931],
-  [1791,932],
+  [259,416],
+  [781,411],
+  [1297,419],
+  [1801,418],
+  [265,924],
+  [795,924],
+  [1300,933],
+  [1810,908],
 ]);
 
 replace(C.JUMP_PIVOTS, [
@@ -77,7 +77,7 @@ C.Assets.prototype.prepareSpriteCutouts = function prepareSpriteCutoutsV16() {
 
 // Mantém a correção de emenda do terreno já validada nos gates de flicker.
 const originalPrepareGround = C.Assets.prototype.prepareGround;
-C.Assets.prototype.prepareGround = function prepareGroundV16() {
+C.Assets.prototype.prepareGround = function prepareGroundV19() {
   originalPrepareGround.call(this);
   for (const tile of this.groundTiles) {
     const ctx = tile.getContext('2d', { willReadFrequently: true });
@@ -87,4 +87,32 @@ C.Assets.prototype.prepareGround = function prepareGroundV16() {
     const centerLeft = ctx.getImageData(tile.width / 2 - 1, 0, 1, height);
     ctx.putImageData(centerLeft, tile.width / 2, 0);
   }
+
+  // Tileset explícito de três peças: canto esquerdo, meio repetível e canto
+  // direito. Os cantos são derivados uma única vez do próprio meio já tingido,
+  // então nunca há mudança de paleta nem upload de textura durante a corrida.
+  this.groundCaps = this.groundTiles.map(tile => {
+    const makeCap = side => {
+      const cap = document.createElement('canvas');
+      cap.width = 40; cap.height = tile.height;
+      const ctx = cap.getContext('2d');
+      const sourceX = side === 'left' ? 0 : tile.width - cap.width;
+      ctx.drawImage(tile, sourceX, 0, cap.width, tile.height, 0, 0, cap.width, tile.height);
+      const outerX = side === 'left' ? 0 : cap.width;
+      const innerX = side === 'left' ? cap.width : 0;
+      const shade = ctx.createLinearGradient(outerX, 0, innerX, 0);
+      shade.addColorStop(0, 'rgba(7,12,17,.48)');
+      shade.addColorStop(1, 'rgba(7,12,17,0)');
+      ctx.fillStyle = shade; ctx.fillRect(0, 0, cap.width, cap.height);
+      ctx.strokeStyle = 'rgba(12,20,25,.68)'; ctx.lineWidth = 2;
+      const dir = side === 'left' ? 1 : -1;
+      ctx.beginPath(); ctx.moveTo(outerX + dir, 0);
+      for (let y = 16; y < cap.height; y += 16) {
+        ctx.lineTo(outerX + dir * (2 + ((y / 16) % 3) * 3), y);
+      }
+      ctx.stroke();
+      return cap;
+    };
+    return { left: makeCap('left'), right: makeCap('right') };
+  });
 };
