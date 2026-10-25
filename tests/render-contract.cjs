@@ -96,6 +96,7 @@ const assert = require('node:assert/strict');
           visited: [...visited],
           runTime: player.runTime,
           theoreticalFps: speed / core.RUN_STRIDE * 8,
+          cycleSeconds: core.RUN_STRIDE / speed,
         };
       };
 
@@ -188,19 +189,19 @@ const assert = require('node:assert/strict');
       assert.ok(frame.bluePixels >= 35, `corrida frame ${frame.frame} precisa mostrar detalhes azuis`);
     }
 
-    // Cadência visual: antes eram 13,4–17,2 trocas/s e o ciclo parecia flicker.
-    // Agora a corrida deve ficar na faixa de ~8–11 frames por segundo.
-    assert.equal(result.cadence.stride, 320, 'stride visual da corrida deve ser 320px por ciclo');
-    assert.ok(result.cadence.phase1.theoreticalFps >= 8 && result.cadence.phase1.theoreticalFps < 9,
-      `fase 1 deve ficar perto de 8,4 FPS, recebido ${result.cadence.phase1.theoreticalFps}`);
-    assert.ok(result.cadence.phase5.theoreticalFps > 10 && result.cadence.phase5.theoreticalFps <= 11,
-      `fase 5 deve ficar perto de 10,8 FPS, recebido ${result.cadence.phase5.theoreticalFps}`);
-    assert.ok(result.cadence.phase1.changes >= 8 && result.cadence.phase1.changes <= 9,
-      `fase 1 não pode piscar frames: ${result.cadence.phase1.changes} mudanças/s`);
-    assert.ok(result.cadence.phase5.changes >= 10 && result.cadence.phase5.changes <= 11,
-      `fase 5 não pode passar de ~11 mudanças/s: ${result.cadence.phase5.changes}`);
-    assert.equal(result.cadence.phase1.visited.length, 8, 'fase 1 ainda precisa usar as 8 poses da corrida');
-    assert.equal(result.cadence.phase5.visited.length, 8, 'fase 5 ainda precisa usar as 8 poses da corrida');
+    // Um ciclo de 8 poses deve parecer corrida, não câmera lenta. A faixa abaixo
+    // mantém o ciclo completo entre ~0,69 s (fase 1) e ~0,53 s (fase 5).
+    assert.equal(result.cadence.stride, 230, 'stride visual da corrida deve ser 230px por ciclo');
+    assert.ok(result.cadence.phase1.cycleSeconds > .65 && result.cadence.phase1.cycleSeconds < .72,
+      `fase 1 deve completar o ciclo em ~0,69 s, recebido ${result.cadence.phase1.cycleSeconds}`);
+    assert.ok(result.cadence.phase5.cycleSeconds > .50 && result.cadence.phase5.cycleSeconds < .56,
+      `fase 5 deve completar o ciclo em ~0,53 s, recebido ${result.cadence.phase5.cycleSeconds}`);
+    assert.ok(result.cadence.phase1.changes >= 11 && result.cadence.phase1.changes <= 12,
+      `fase 1 deve avançar ~12 poses/s: ${result.cadence.phase1.changes}`);
+    assert.ok(result.cadence.phase5.changes >= 14 && result.cadence.phase5.changes <= 15,
+      `fase 5 deve avançar ~15 poses/s: ${result.cadence.phase5.changes}`);
+    assert.equal(result.cadence.phase1.visited.length, 8, 'fase 1 precisa usar as 8 poses da corrida');
+    assert.equal(result.cadence.phase5.visited.length, 8, 'fase 5 precisa usar as 8 poses da corrida');
 
     assert.equal(result.heroRuntime.visible, true, 'sprite do Goku precisa estar visível durante gameplay');
     assert.equal(result.heroRuntime.alpha, 1, 'sprite do Goku precisa renderizar com alpha 1');
@@ -219,7 +220,7 @@ const assert = require('node:assert/strict');
     assert.equal(result.terrain.terrain839, 839, 'terreno deve usar deslocamento inteiro');
     assert.equal(result.terrain.terrain840, 840, 'wrap do terreno não pode produzir salto fracionário');
 
-    console.log('PASS: Goku real, 8 poses, corrida em 8–11 FPS sem flicker, pulo sincronizado e terreno alinhado.');
+    console.log('PASS: Goku real, 8 poses, passada em 0,69–0,53 s, pulo sincronizado e terreno alinhado.');
   } finally {
     await browser.close();
   }

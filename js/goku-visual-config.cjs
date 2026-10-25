@@ -1,4 +1,6 @@
-// Node preload usado pelos testes para aplicar a mesma configuração visual v13.
+// Node preload: espelha os assets/pivôs visuais v15 usados no navegador.
+// A cadência de runtime continua validada nos testes de navegador, porque o
+// núcleo Node mantém RUN_STRIDE=200 como contrato físico histórico.
 const C = require('./game.js');
 const replace = (target, values) => target.splice(0, target.length, ...values);
 
@@ -26,14 +28,14 @@ replace(C.JUMP_FRAMES, [
 ]);
 
 replace(C.RUN_PIVOTS, [
-  [187,338],
-  [573,339],
-  [948,339],
-  [1347,339],
-  [184,680],
-  [573,683],
-  [950,681],
-  [1343,681],
+  [191,338],
+  [571,339],
+  [929,339],
+  [1349,339],
+  [180,680],
+  [568,683],
+  [959,681],
+  [1355,681],
 ]);
 
 replace(C.JUMP_PIVOTS, [
