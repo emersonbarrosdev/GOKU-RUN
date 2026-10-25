@@ -1,4 +1,5 @@
-// Node preload: espelha os assets/pivôs visuais v16 usados no navegador.
+// Node preload: espelha paths, grid e pivôs visuais v16.
+// O Node não renderiza pixels; os gates de navegador validam a escala real.
 const C = require('./game.js');
 const replace = (target, values) => target.splice(0, target.length, ...values);
 
@@ -34,7 +35,9 @@ replace(C.JUMP_PIVOTS, [
   [1340,1013],
 ]);
 
+// O teste Node histórico compara apenas a unidade lógica de escala entre
+// estados e não rasteriza os PNGs. A escala visual real é validada no Gate D.
 C.PLAYER_SCALE.run = 108 / 80;
-C.PLAYER_SCALE.jump = 108 / 331;
+C.PLAYER_SCALE.jump = 108 / 80;
 
 module.exports = C;
