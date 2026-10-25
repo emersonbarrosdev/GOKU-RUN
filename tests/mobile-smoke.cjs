@@ -39,12 +39,19 @@ const path=require('node:path');
     });
     await page.getByRole('button',{name:'CONTINUAR'}).tap();
     if(process.env.QA_OUTPUT_DIR)await page.screenshot({path:path.join(process.env.QA_OUTPUT_DIR,'mobile-landscape.png')});
+
+    // A corrida agora é intencionalmente mais lenta (~8,4 FPS na fase 1).
+    // O smoke observa 2 segundos para não confundir "pose dura mais" com
+    // "animação travou" em Chromium mobile/headless.
     const frames=await page.evaluate(async()=>{
       const frames=new Set();
-      for(let i=0;i<20;i++){frames.add(window.__gokuRun.scene.hero.frame.name);await new Promise(r=>setTimeout(r,50));}
-      return [...frames];
+      for(let i=0;i<40;i++){frames.add(Number(window.__gokuRun.scene.hero.frame.name));await new Promise(r=>setTimeout(r,50));}
+      return [...frames].sort((a,b)=>a-b);
     });
-    assert.ok(frames.length>=7,'Phaser actually advances the whole-body run frames');
+    console.log('MOBILE_RUN_FRAMES',JSON.stringify(frames));
+    assert.ok(frames.length>=7,'mobile precisa avançar por praticamente todo o ciclo de corrida');
+    assert.ok(frames.every(frame=>frame>=0&&frame<=7),'mobile deve usar somente frames de corrida enquanto grounded');
+
     await page.getByRole('button',{name:'Pausar',exact:true}).tap();
     await page.waitForTimeout(100);
     const frozen=await page.evaluate(()=>[window.__gokuRun.scene.hero.frame.name,window.__gokuRun.game.track.distance]);
@@ -63,6 +70,6 @@ const path=require('node:path');
     const origin=new URL(page.url()).origin;
     const external=requests.filter(url=>!url.startsWith('data:')&&new URL(url).origin!==origin);
     assert.deepEqual(external,[],'no CDN or external runtime dependencies (local blob URLs are allowed)');
-    console.log('PASS: touch jump, double jump, KI without jump, pause, landscape, portrait pause, offline play, no JS errors.');
+    console.log('PASS: touch jump, double jump, KI, corrida completa, pause, landscape, portrait, offline, no JS errors.');
   }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

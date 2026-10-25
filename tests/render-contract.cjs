@@ -73,10 +73,41 @@ const assert = require('node:assert/strict');
         }));
       };
 
+      const cadenceSample = speed => {
+        const player = new core.Player();
+        const track = { supports: () => true };
+        let changes = 0;
+        let lastFrame = player.frame;
+        const visited = new Set([lastFrame]);
+
+        for (let i = 0; i < 60; i++) {
+          player.update(1 / 60, track, speed);
+          const frame = player.frame;
+          visited.add(frame);
+          if (frame !== lastFrame) {
+            changes++;
+            lastFrame = frame;
+          }
+        }
+
+        return {
+          speed,
+          changes,
+          visited: [...visited],
+          runTime: player.runTime,
+          theoreticalFps: speed / core.RUN_STRIDE * 8,
+        };
+      };
+
       const hero = textureStats('hero');
       const heroFrames = frameStats('hero', 12);
       const soldier = textureStats('soldier');
       const flyer = textureStats('flyer');
+      const cadence = {
+        stride: core.RUN_STRIDE,
+        phase1: cadenceSample(335),
+        phase5: cadenceSample(430),
+      };
 
       const player = game.player;
       player.grounded = true;
@@ -126,6 +157,7 @@ const assert = require('node:assert/strict');
         heroFrames,
         soldier,
         flyer,
+        cadence,
         heroRuntime: {
           visible: scene.hero.visible,
           alpha: scene.hero.alpha,
@@ -146,8 +178,6 @@ const assert = require('node:assert/strict');
       assert.ok(value.solidPixels >= 80, `${name} não pode ser apenas um fantasma translúcido`);
     }
 
-    // O erro que chegou à main anteriormente tinha alpha, mas só mostrava um
-    // contorno escuro. Agora o contrato exige o corpo real e colorido do Goku.
     assert.ok(result.hero.orangePixels >= 1500, 'atlas do Goku precisa conter o gi laranja real');
     assert.ok(result.hero.bluePixels >= 350, 'atlas do Goku precisa conter detalhes azuis reais');
 
@@ -157,6 +187,20 @@ const assert = require('node:assert/strict');
       assert.ok(frame.orangePixels >= 180, `corrida frame ${frame.frame} precisa mostrar o gi laranja`);
       assert.ok(frame.bluePixels >= 35, `corrida frame ${frame.frame} precisa mostrar detalhes azuis`);
     }
+
+    // Cadência visual: antes eram 13,4–17,2 trocas/s e o ciclo parecia flicker.
+    // Agora a corrida deve ficar na faixa de ~8–11 frames por segundo.
+    assert.equal(result.cadence.stride, 320, 'stride visual da corrida deve ser 320px por ciclo');
+    assert.ok(result.cadence.phase1.theoreticalFps >= 8 && result.cadence.phase1.theoreticalFps < 9,
+      `fase 1 deve ficar perto de 8,4 FPS, recebido ${result.cadence.phase1.theoreticalFps}`);
+    assert.ok(result.cadence.phase5.theoreticalFps > 10 && result.cadence.phase5.theoreticalFps <= 11,
+      `fase 5 deve ficar perto de 10,8 FPS, recebido ${result.cadence.phase5.theoreticalFps}`);
+    assert.ok(result.cadence.phase1.changes >= 8 && result.cadence.phase1.changes <= 9,
+      `fase 1 não pode piscar frames: ${result.cadence.phase1.changes} mudanças/s`);
+    assert.ok(result.cadence.phase5.changes >= 10 && result.cadence.phase5.changes <= 11,
+      `fase 5 não pode passar de ~11 mudanças/s: ${result.cadence.phase5.changes}`);
+    assert.equal(result.cadence.phase1.visited.length, 8, 'fase 1 ainda precisa usar as 8 poses da corrida');
+    assert.equal(result.cadence.phase5.visited.length, 8, 'fase 5 ainda precisa usar as 8 poses da corrida');
 
     assert.equal(result.heroRuntime.visible, true, 'sprite do Goku precisa estar visível durante gameplay');
     assert.equal(result.heroRuntime.alpha, 1, 'sprite do Goku precisa renderizar com alpha 1');
@@ -175,7 +219,7 @@ const assert = require('node:assert/strict');
     assert.equal(result.terrain.terrain839, 839, 'terreno deve usar deslocamento inteiro');
     assert.equal(result.terrain.terrain840, 840, 'wrap do terreno não pode produzir salto fracionário');
 
-    console.log('PASS: Goku com corpo colorido real, 8 poses de corrida, pulo sincronizado, inimigos visíveis e terreno alinhado.');
+    console.log('PASS: Goku real, 8 poses, corrida em 8–11 FPS sem flicker, pulo sincronizado e terreno alinhado.');
   } finally {
     await browser.close();
   }
