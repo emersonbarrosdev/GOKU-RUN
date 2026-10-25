@@ -118,10 +118,12 @@ const assert = require('node:assert/strict');
 
     console.log('RENDER_CONTRACT', JSON.stringify(result));
 
-    assert.equal(result.runPath, './assets/spritesheets/goku_jog_run_v1.png');
-    assert.deepEqual(result.runFrames, Array.from({ length: 8 }, (_, i) => [i * 48, 0, 48, 96]),
-      'corrida deve usar grid horizontal regular de 8 células idênticas');
-    assert.equal(new Set(result.runPivots.map(([, y]) => y)).size, 1, 'todos os frames devem compartilhar a mesma baseline');
+    assert.equal(result.runPath, './assets/spritesheets/goku_run_v10.png');
+    assert.deepEqual(result.runFrames, Array.from({ length: 8 }, (_, i) => [
+      (i % 4) * 512, Math.floor(i / 4) * 512, 512, 512,
+    ]), 'corrida deve usar grid 4x2 regular com oito poses completas');
+    assert.ok(new Set(result.runPivots.map(([, y]) => y)).size > 1,
+      'pivôs verticais devem preservar compressão, passagem e voo em vez de colar todos os pés no chão');
 
     for (const [name, value] of Object.entries({ hero: result.hero, soldier: result.soldier, flyer: result.flyer })) {
       assert.ok(value.maxAlpha >= 245, `${name} precisa conter pixels realmente opacos`);
@@ -164,7 +166,7 @@ const assert = require('node:assert/strict');
     assert.equal(result.terrain.terrain839, 839);
     assert.equal(result.terrain.terrain840, 840);
 
-    console.log('PASS: grid regular de 8 frames, corrida em 10–14 FPS, pulo separado e terreno alinhado.');
+    console.log('PASS: ciclo biomecânico 4x2, corrida em 10–14 FPS, pulo separado e terreno alinhado.');
   } finally {
     await browser.close();
   }

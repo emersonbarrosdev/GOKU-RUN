@@ -91,22 +91,6 @@ function waitForScene() {
   });
 }
 
-function prepareRunSource(image) {
-  const surface = document.createElement('canvas');
-  surface.width = image.width;
-  surface.height = image.height;
-  const ctx = surface.getContext('2d', { willReadFrequently: true });
-  ctx.drawImage(image, 0, 0);
-
-  const pixels = ctx.getImageData(0, 0, surface.width, surface.height);
-  for (let i = 3; i < pixels.data.length; i += 4) {
-    pixels.data[i] = Math.max(0, Math.min(255, (pixels.data[i] - 232) * 255 / 16));
-  }
-  ctx.clearRect(0, 0, surface.width, surface.height);
-  ctx.putImageData(pixels, 0, 0);
-  return surface;
-}
-
 function animateSheetPreview(node) {
   if (!node || !C) return () => {};
 
@@ -123,7 +107,6 @@ function animateSheetPreview(node) {
   const image = new Image();
   image.onload = () => {
     if (stopped) return;
-    const source = prepareRunSource(image);
 
     const renderFrame = () => {
       if (stopped) return;
@@ -132,7 +115,7 @@ function animateSheetPreview(node) {
       const scale = C.PLAYER_SCALE.run;
       ctx.clearRect(0, 0, 160, 160);
       ctx.drawImage(
-        source,
+        image,
         bounds[0], bounds[1], bounds[2], bounds[3],
         80 + (bounds[0] - pivot[0]) * scale,
         140 + (bounds[1] - pivot[1]) * scale,

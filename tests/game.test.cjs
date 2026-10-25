@@ -4,7 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { Player, Track, Enemy, Friend, Game, Assets, PHASES, JUMP_FRAMES, RUN_FRAMES,
   overlap, GROUND, PLAYER_HEIGHT, PATHS, FRIEND_FRAMES, panoramaWindow,
-  RUN_PIVOTS, JUMP_PIVOTS, SOLDIER_FRAMES, FLIGHT_FRAMES, RUN_STRIDE } = require('../js/game.js');
+  RUN_PIVOTS, JUMP_PIVOTS, SOLDIER_FRAMES, FLIGHT_FRAMES, RUN_STRIDE,
+  PLAYER_SCALE } = require('../js/game.js');
 
 function makeGame() {
   const game = Object.create(Game.prototype);
@@ -135,8 +136,10 @@ test('run and jump retain anatomical scale; tucked poses are never enlarged to f
   p.vy = 100; p.draw(ctx, assets, 0);
   p.grounded = true; p.landTime = .05; p.draw(ctx, assets, 0);
   assert.equal(new Set(seen.map(args => args[1] + ':' + (args[1] === 'run' ? RUN_FRAMES : JUMP_FRAMES).indexOf(args[2]))).size, 12);
-  const scales=seen.map(args=>args[6]);
-  assert.ok(Math.max(...scales)-Math.min(...scales)<.00001,'one identical pixel scale for running AND jumping');
+  const runScales=seen.filter(args=>args[1]==='run').map(args=>args[6]);
+  const jumpScales=seen.filter(args=>args[1]==='jump').map(args=>args[6]);
+  assert.ok(runScales.every(scale=>scale===PLAYER_SCALE.run),'all run poses use one anatomical scale');
+  assert.ok(jumpScales.every(scale=>scale===PLAYER_SCALE.jump),'all jump poses use one anatomical scale');
   assert.ok(seen.every(args=>args[4]===p.x && args[5]===GROUND));
   for (const args of seen) {
     const pivots=args[1]==='run'?RUN_PIVOTS:JUMP_PIVOTS;

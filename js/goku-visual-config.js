@@ -5,14 +5,19 @@ if (!C) throw new Error('GokuCore não inicializado antes do visual-config');
 
 const replace = (target, values) => target.splice(0, target.length, ...values);
 
-// Corrida nova em grid técnico horizontal: 8 células idênticas de 48x96.
+// Corrida de produção em grid 4x2: 8 poses biomecânicas completas.
 // O pulo continua no atlas anterior, separado da corrida.
 Object.assign(C.PATHS, {
-  run: './assets/spritesheets/goku_jog_run_v1.png',
+  run: './assets/spritesheets/goku_run_v10.png',
   jump: './assets/spritesheets/goku_stride_v8.png',
 });
 
-replace(C.RUN_FRAMES, Array.from({ length: 8 }, (_, frame) => [frame * 48, 0, 48, 96]));
+replace(C.RUN_FRAMES, Array.from({ length: 8 }, (_, frame) => [
+  (frame % 4) * 512,
+  Math.floor(frame / 4) * 512,
+  512,
+  512,
+]));
 
 replace(C.JUMP_FRAMES, [
   [102,730,202,282],
@@ -21,17 +26,17 @@ replace(C.JUMP_FRAMES, [
   [1261,729,196,284],
 ]);
 
-// O torso foi medido frame a frame no PNG final. Estes pivôs deixam o centro
-// do gi praticamente no mesmo X durante todo o ciclo e usam uma baseline comum.
+// Pivô horizontal comum estabiliza quadril/torso. O eixo Y preserva contato,
+// compressão, passagem e voo: os frames 3/7 ficam realmente fora do chão.
 replace(C.RUN_PIVOTS, [
-  [23.864,90],
-  [71.820,90],
-  [119.682,90],
-  [167.661,90],
-  [215.897,90],
-  [264.036,90],
-  [311.697,90],
-  [359.378,90],
+  [245,416],
+  [768,411],
+  [1279,418],
+  [1803,420],
+  [262,923],
+  [776,925],
+  [1286,931],
+  [1791,932],
 ]);
 
 replace(C.JUMP_PIVOTS, [
@@ -41,9 +46,9 @@ replace(C.JUMP_PIVOTS, [
   [1340,1013],
 ]);
 
-// O corpo ocupa ~80 px dentro da célula de 96 px. Escala fixa para chegar a
-// ~108 px no jogo sem normalizar cada pose separadamente.
-C.PLAYER_SCALE.run = 108 / 80;
+// Escala anatômica única: o corpo ocupa ~321 px no atlas e chega a ~108 px no
+// jogo. Nunca normalizar pose por pose, pois isso faria Goku pulsar de tamanho.
+C.PLAYER_SCALE.run = 108 / 321;
 C.PLAYER_SCALE.jump = 108 / 331;
 
 // PNG novo já possui alpha limpo. Não aplicar o antigo threshold de matte nele.

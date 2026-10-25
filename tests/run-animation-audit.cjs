@@ -89,29 +89,43 @@ const assert = require('node:assert/strict');
     const torsoXs = result.frames.map(frame => frame.torsoCenter[0]);
     const torsoSpread = Math.max(...torsoXs) - Math.min(...torsoXs);
     const maxTorsoJump = Math.max(...result.transitions.map(t => Math.abs(t.torsoDx)));
-    const bottoms = result.frames.map(frame => frame.bbox[3]);
-    const bottomSpread = Math.max(...bottoms) - Math.min(...bottoms);
+    const contactFrames = [0, 1, 4, 5].map(index => result.frames[index]);
+    const passingFrames = [2, 6].map(index => result.frames[index]);
+    const flightFrames = [3, 7].map(index => result.frames[index]);
+    const contactBottom = Math.max(...contactFrames.map(frame => frame.bbox[3]));
+    const flightBottom = Math.max(...flightFrames.map(frame => frame.bbox[3]));
     const minimumPoseDifference = Math.min(...result.differences.map(pair => pair.changedPixels));
 
-    assert.ok(torsoSpread <= 1.5,
-      `torso deve permanecer no mesmo eixo X no jogging; variação=${torsoSpread.toFixed(3)}px`);
-    assert.ok(maxTorsoJump <= 1.5,
+    assert.ok(torsoSpread <= 1,
+      `torso deve permanecer no mesmo eixo X na corrida; variação=${torsoSpread.toFixed(3)}px`);
+    assert.ok(maxTorsoJump <= .75,
       `nenhuma troca pode teleportar o torso; maior salto=${maxTorsoJump.toFixed(3)}px`);
-    assert.ok(bottomSpread <= 2,
-      `baseline dos pés precisa permanecer estável; variação=${bottomSpread}px`);
-    assert.ok(minimumPoseDifference >= 350,
+    assert.ok(contactBottom - flightBottom >= 4,
+      `a corrida precisa de fase aérea real; contato=${contactBottom}px, voo=${flightBottom}px`);
+    assert.ok(minimumPoseDifference >= 1000,
       `todos os frames devem ser poses visualmente distintas; menor diferença=${minimumPoseDifference}px`);
 
-    for (const frame of result.frames) {
-      assert.ok(frame.bbox[3] >= 137 && frame.bbox[3] <= 139,
-        `frame ${frame.frame} precisa permanecer junto à baseline; bottom=${frame.bbox[3]}`);
+    for (const frame of contactFrames) {
+      assert.ok(frame.bbox[3] >= 138 && frame.bbox[3] <= 140,
+        `contato/compressão ${frame.frame} precisa alcançar a baseline; bottom=${frame.bbox[3]}`);
       assert.ok(frame.groundPixels > 0,
-        `frame ${frame.frame} deve possuir contato/rasante no piso para o trote`);
+        `contato/compressão ${frame.frame} precisa tocar o piso`);
+    }
+    for (const frame of passingFrames) {
+      assert.ok(frame.bbox[3] >= 136 && frame.bbox[3] <= 138,
+        `passagem ${frame.frame} deve aliviar o contato; bottom=${frame.bbox[3]}`);
+    }
+    for (const frame of flightFrames) {
+      assert.ok(frame.bbox[3] <= 135,
+        `voo ${frame.frame} precisa sair do chão; bottom=${frame.bbox[3]}`);
+      assert.equal(frame.groundPixels, 0, `voo ${frame.frame} não pode conter pixels no piso`);
+    }
+    for (const frame of result.frames) {
       assert.ok(frame.orangeCount > 150,
-        `frame ${frame.frame} precisa conter torso laranja suficiente`);
+        `frame ${frame.frame} precisa conter o gi laranja`);
     }
 
-    console.log(`PASS: corrida alinhada e 8 poses distintas (torso ${torsoSpread.toFixed(3)}px, salto ${maxTorsoJump.toFixed(3)}px, baseline ${bottomSpread}px, diferença mínima ${minimumPoseDifference}px).`);
+    console.log(`PASS: corrida alinhada com contato/passagem/voo (torso ${torsoSpread.toFixed(3)}px, salto lateral ${maxTorsoJump.toFixed(3)}px, contato ${contactBottom}px, voo ${flightBottom}px, diferença mínima ${minimumPoseDifference}px).`);
   } finally {
     await browser.close();
   }

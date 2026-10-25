@@ -2,7 +2,8 @@
 
 | Arquivo | Uso |
 | --- | --- |
-| [goku_fullbody_v7.png](../assets/spritesheets/goku_fullbody_v7.png) | 8 quadros completos de corrida e 4 de salto |
+| [goku_run_v10.png](../assets/spritesheets/goku_run_v10.png) | 8 quadros de corrida: contato, compressão, passagem e voo para cada perna |
+| [goku_stride_v8.png](../assets/spritesheets/goku_stride_v8.png) | 4 quadros de salto usados pelo runtime |
 | [enemies_fullbody_v7.png](../assets/spritesheets/enemies_fullbody_v7.png) | Corrida para esquerda, voo, carga e disparo |
 | [friends_motion_v4.png](../assets/spritesheets/friends_motion_v4.png) | 4 gestos por aliado; sem nomes |
 | [terrain_ground_v4.png](../assets/spritesheets/terrain_ground_v4.png) | Chão contínuo, pré-colorido por fase |
