@@ -92,18 +92,13 @@ function waitForScene() {
 }
 
 function prepareRunSource(image) {
+  // O sheet v17 já chega com alpha limpo. O threshold antigo (alpha > 232)
+  // era necessário para assets com matte, mas apagava o novo PNG no preview.
   const surface = document.createElement('canvas');
   surface.width = image.width;
   surface.height = image.height;
-  const ctx = surface.getContext('2d', { willReadFrequently: true });
+  const ctx = surface.getContext('2d');
   ctx.drawImage(image, 0, 0);
-
-  const pixels = ctx.getImageData(0, 0, surface.width, surface.height);
-  for (let i = 3; i < pixels.data.length; i += 4) {
-    pixels.data[i] = Math.max(0, Math.min(255, (pixels.data[i] - 232) * 255 / 16));
-  }
-  ctx.clearRect(0, 0, surface.width, surface.height);
-  ctx.putImageData(pixels, 0, 0);
   return surface;
 }
 
