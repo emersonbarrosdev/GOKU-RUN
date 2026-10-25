@@ -19,9 +19,6 @@ const assert = require('node:assert/strict');
     await expectText(page, '#story-text', 'fruto roxo');
     await page.getByRole('button', { name: 'PULAR HISTÓRIA' }).waitFor({ state: 'visible' });
 
-    // Regressão visual: texto/botões podiam estar corretos enquanto a miniatura
-    // mostrava apenas um contorno quase invisível. Agora a própria história
-    // precisa provar que está desenhando o atlas hero real e colorido.
     const previewCanvas = page.locator('#story-runner-preview canvas');
     await previewCanvas.waitFor({ state: 'visible', timeout: 5000 });
     await page.waitForTimeout(150);
@@ -68,6 +65,9 @@ const assert = require('node:assert/strict');
     await story.waitFor({ state: 'hidden', timeout: 5000 });
     let start = page.getByRole('button', { name: 'JOGAR' });
     await start.waitFor({ state: 'visible', timeout: 5000 });
+    const replayStory = page.getByRole('button', { name: 'VER HISTÓRIA' });
+    await replayStory.waitFor({ state: 'visible', timeout: 5000 });
+
     await start.click();
     await page.locator('#hud').waitFor({ state: 'visible', timeout: 5000 });
 
@@ -77,6 +77,19 @@ const assert = require('node:assert/strict');
     assert.equal(await story.isVisible(), false, 'história já vista deve ser pulada automaticamente');
     start = page.getByRole('button', { name: 'JOGAR' });
     await start.waitFor({ state: 'visible', timeout: 5000 });
+    await replayStory.waitFor({ state: 'visible', timeout: 5000 });
+
+    // Mas ela nunca pode "sumir": o menu precisa permitir rever os 3 capítulos.
+    await replayStory.click();
+    await story.waitFor({ state: 'visible', timeout: 5000 });
+    await expectText(page, '#story-kicker', 'CAPÍTULO 1');
+    await expectText(page, '#story-title', 'Goku perdeu seus poderes');
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(120);
+    assert.equal(await story.isVisible(), true, 'replay da história também bloqueia início por teclado');
+    await page.getByRole('button', { name: 'PULAR HISTÓRIA' }).click();
+    await story.waitFor({ state: 'hidden', timeout: 5000 });
+    await replayStory.waitFor({ state: 'visible', timeout: 5000 });
 
     // O botão PULAR HISTÓRIA também precisa funcionar no primeiro acesso.
     await page.evaluate(() => localStorage.removeItem('goku-run-story-seen-v1'));
@@ -85,8 +98,9 @@ const assert = require('node:assert/strict');
     await page.getByRole('button', { name: 'PULAR HISTÓRIA' }).click();
     await story.waitFor({ state: 'hidden', timeout: 5000 });
     await page.getByRole('button', { name: 'JOGAR' }).waitFor({ state: 'visible', timeout: 5000 });
+    await replayStory.waitFor({ state: 'visible', timeout: 5000 });
 
-    console.log('PASS: história, preview real do Goku, pular história e persistência.');
+    console.log('PASS: intro automática no primeiro acesso, replay pelo menu, preview real, skip e persistência.');
   } finally {
     await browser.close();
   }
