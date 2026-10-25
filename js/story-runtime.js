@@ -33,17 +33,21 @@ function blockPrematureStart(event) {
   if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
 }
 
+function lockStoryGate() {
+  if (qaMode) return;
+  storyUnlocked = false;
+  document.addEventListener('click', blockPrematureStart, true);
+  window.addEventListener('keydown', blockPrematureStart, true);
+}
+
 function unlockStoryGate() {
-  if (storyUnlocked) return;
+  if (qaMode) return;
   storyUnlocked = true;
   document.removeEventListener('click', blockPrematureStart, true);
   window.removeEventListener('keydown', blockPrematureStart, true);
 }
 
-if (!qaMode) {
-  document.addEventListener('click', blockPrematureStart, true);
-  window.addEventListener('keydown', blockPrematureStart, true);
-}
+if (!qaMode) lockStoryGate();
 
 const STORY = [
   {
@@ -94,8 +98,6 @@ function prepareRunSource(image) {
   const ctx = surface.getContext('2d', { willReadFrequently: true });
   ctx.drawImage(image, 0, 0);
 
-  // Mesma regra do Assets.prepareSpriteCutouts() usada pela gameplay para o
-  // atlas v8: remove apenas o matte de alpha, preservando as cores do Goku.
   const pixels = ctx.getImageData(0, 0, surface.width, surface.height);
   for (let i = 3; i < pixels.data.length; i += 4) {
     pixels.data[i] = Math.max(0, Math.min(255, (pixels.data[i] - 232) * 255 / 16));
@@ -141,7 +143,8 @@ function animateSheetPreview(node) {
     };
 
     renderFrame();
-    timer = setInterval(renderFrame, 1000 / 12);
+    const previewFrameRate = 335 / C.RUN_STRIDE * 8;
+    timer = setInterval(renderFrame, 1000 / previewFrameRate);
   };
   image.onerror = () => console.error('Falha ao carregar atlas do Goku para a história:', C.PATHS.run);
   image.src = C.PATHS.run;
@@ -159,11 +162,13 @@ function restoreMenu(panel) {
   panel.style.display = '';
   panel.style.visibility = 'visible';
   const start = $('start-button');
+  const replayStory = $('story-replay');
   if (start) {
     start.hidden = false;
     start.textContent = 'JOGAR';
     start.removeAttribute('aria-hidden');
   }
+  if (replayStory) replayStory.hidden = false;
   const hud = $('hud');
   const ki = $('ki-button');
   if (hud) hud.hidden = true;
@@ -181,11 +186,14 @@ function showStory() {
   const next = $('story-next');
   const skip = $('story-skip');
   const progress = $('story-progress');
+  const replayStory = $('story-replay');
   if (!overlay || !panel || !next || !title || !kicker || !text || !progress) {
     unlockStoryGate();
     return;
   }
 
+  lockStoryGate();
+  if (replayStory) replayStory.hidden = true;
   panel.style.visibility = 'hidden';
   overlay.hidden = false;
   let page = 0;
@@ -202,20 +210,22 @@ function showStory() {
 
   const finishStory = () => {
     stopPreview();
+    next.onclick = null;
+    if (skip) skip.onclick = null;
     overlay.hidden = true;
     markStorySeen();
     restoreMenu(panel);
   };
 
-  next.addEventListener('click', () => {
+  next.onclick = () => {
     if (page < STORY.length - 1) {
       page++;
       render();
       return;
     }
     finishStory();
-  });
-  skip?.addEventListener('click', finishStory, { once: true });
+  };
+  if (skip) skip.onclick = finishStory;
 
   render();
   stopPreview = animateSheetPreview($('story-runner-preview'));
@@ -275,8 +285,15 @@ async function bootStoryRuntime() {
   if (qaMode) return;
   await waitForMenuReady();
 
-  if (hasSeenStory()) unlockStoryGate();
-  else showStory();
+  const replayStory = $('story-replay');
+  if (replayStory) replayStory.onclick = () => showStory();
+
+  if (hasSeenStory()) {
+    unlockStoryGate();
+    if (replayStory) replayStory.hidden = false;
+  } else {
+    showStory();
+  }
 
   // O final pode aguardar a cena Phaser sem bloquear a introdução.
   const scene = await waitForScene();
