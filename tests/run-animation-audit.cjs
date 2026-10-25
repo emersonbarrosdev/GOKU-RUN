@@ -1,4 +1,5 @@
 const { chromium } = require('playwright-core');
+const assert = require('node:assert/strict');
 
 (async () => {
   const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_PATH });
@@ -68,6 +69,28 @@ const { chromium } = require('playwright-core');
     });
 
     console.log('RUN_ANIMATION_AUDIT ' + JSON.stringify(result));
+
+    const torsoXs = result.frames.map(frame => frame.torsoCenter[0]);
+    const torsoSpread = Math.max(...torsoXs) - Math.min(...torsoXs);
+    const maxTorsoJump = Math.max(...result.transitions.map(t => Math.abs(t.torsoDx)));
+
+    assert.ok(torsoSpread <= .75,
+      `torso deve permanecer registrado no mesmo eixo X; variação=${torsoSpread.toFixed(3)}px`);
+    assert.ok(maxTorsoJump <= .75,
+      `nenhuma troca pode teleportar o torso lateralmente; maior salto=${maxTorsoJump.toFixed(3)}px`);
+
+    // Quadros 3 e 7 são as duas poses de voo. Os demais mantêm contato/rasante
+    // junto ao piso. Isto preserva o sobe/desce natural sem deslocamento lateral.
+    assert.equal(result.frames[3].bbox[3], 134);
+    assert.equal(result.frames[7].bbox[3], 134);
+    assert.equal(result.frames[3].groundPixels, 0);
+    assert.equal(result.frames[7].groundPixels, 0);
+    for (const frame of result.frames.filter(({ frame }) => frame !== 3 && frame !== 7)) {
+      assert.equal(frame.bbox[3], 139, `frame ${frame.frame} deve permanecer junto ao chão`);
+      assert.ok(frame.groundPixels > 0, `frame ${frame.frame} precisa ter pixels no contato/rasante`);
+    }
+
+    console.log(`PASS: torso registrado (spread ${torsoSpread.toFixed(3)}px, salto máximo ${maxTorsoJump.toFixed(3)}px) e voo preservado.`);
   } finally {
     await browser.close();
   }
