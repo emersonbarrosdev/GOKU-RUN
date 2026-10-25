@@ -8,3 +8,4 @@ android/**/build/
 android/.idea/
 *.jks
 *.keystore
+assets/spritesheets/goku_action_grid_v1.png
