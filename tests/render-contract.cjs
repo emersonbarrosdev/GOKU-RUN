@@ -138,15 +138,19 @@ const assert = require('node:assert/strict');
       assert.ok(frame.bluePixels >= 25, `jog frame ${frame.frame} precisa mostrar detalhes azuis`);
     }
 
-    assert.equal(result.cadence.stride, 300, 'jogging deve usar 300px por ciclo completo');
-    assert.ok(result.cadence.phase1.cycleSeconds > .86 && result.cadence.phase1.cycleSeconds < .93,
-      `fase 1 deve completar o trote em ~0,90 s, recebido ${result.cadence.phase1.cycleSeconds}`);
-    assert.ok(result.cadence.phase5.cycleSeconds > .67 && result.cadence.phase5.cycleSeconds < .73,
-      `fase 5 deve completar o trote em ~0,70 s, recebido ${result.cadence.phase5.cycleSeconds}`);
-    assert.ok(result.cadence.phase1.changes >= 8 && result.cadence.phase1.changes <= 9,
-      `fase 1 deve avançar ~9 poses/s: ${result.cadence.phase1.changes}`);
-    assert.ok(result.cadence.phase5.changes >= 11 && result.cadence.phase5.changes <= 12,
-      `fase 5 deve avançar ~11 poses/s: ${result.cadence.phase5.changes}`);
+    assert.equal(result.cadence.stride, 255, 'corrida deve usar 255px por ciclo completo');
+    assert.ok(result.cadence.phase1.cycleSeconds > .74 && result.cadence.phase1.cycleSeconds < .78,
+      `fase 1 deve completar o ciclo em ~0,76 s, recebido ${result.cadence.phase1.cycleSeconds}`);
+    assert.ok(result.cadence.phase5.cycleSeconds > .57 && result.cadence.phase5.cycleSeconds < .61,
+      `fase 5 deve completar o ciclo em ~0,59 s, recebido ${result.cadence.phase5.cycleSeconds}`);
+    assert.ok(result.cadence.phase1.theoreticalFps >= 10 && result.cadence.phase1.theoreticalFps <= 14,
+      `fase 1 deve ficar entre 10 e 14 FPS: ${result.cadence.phase1.theoreticalFps}`);
+    assert.ok(result.cadence.phase5.theoreticalFps >= 10 && result.cadence.phase5.theoreticalFps <= 14,
+      `fase 5 deve ficar entre 10 e 14 FPS: ${result.cadence.phase5.theoreticalFps}`);
+    assert.ok(result.cadence.phase1.changes >= 10 && result.cadence.phase1.changes <= 11,
+      `fase 1 deve avançar ~10,5 poses/s: ${result.cadence.phase1.changes}`);
+    assert.ok(result.cadence.phase5.changes >= 13 && result.cadence.phase5.changes <= 14,
+      `fase 5 deve avançar ~13,5 poses/s: ${result.cadence.phase5.changes}`);
     assert.equal(result.cadence.phase1.visited.length, 8, 'fase 1 precisa usar as 8 poses do jogging');
     assert.equal(result.cadence.phase5.visited.length, 8, 'fase 5 precisa usar as 8 poses do jogging');
 
@@ -160,7 +164,7 @@ const assert = require('node:assert/strict');
     assert.equal(result.terrain.terrain839, 839);
     assert.equal(result.terrain.terrain840, 840);
 
-    console.log('PASS: grid regular de 8 frames, jogging em 0,90–0,70 s, pulo separado e terreno alinhado.');
+    console.log('PASS: grid regular de 8 frames, corrida em 10–14 FPS, pulo separado e terreno alinhado.');
   } finally {
     await browser.close();
   }

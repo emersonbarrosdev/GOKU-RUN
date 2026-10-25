@@ -40,9 +40,8 @@ const path=require('node:path');
     await page.getByRole('button',{name:'CONTINUAR'}).tap();
     if(process.env.QA_OUTPUT_DIR)await page.screenshot({path:path.join(process.env.QA_OUTPUT_DIR,'mobile-landscape.png')});
 
-    // A corrida agora é intencionalmente mais lenta (~8,4 FPS na fase 1).
-    // O smoke observa 2 segundos para não confundir "pose dura mais" com
-    // "animação travou" em Chromium mobile/headless.
+    // A corrida fica entre 10 e 14 FPS e continua ligada à distância do mundo.
+    // O smoke observa dois segundos para cobrir o ciclo inteiro mesmo sob carga.
     const frames=await page.evaluate(async()=>{
       const frames=new Set();
       for(let i=0;i<40;i++){frames.add(Number(window.__gokuRun.scene.hero.frame.name));await new Promise(r=>setTimeout(r,50));}

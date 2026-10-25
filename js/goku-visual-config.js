@@ -66,34 +66,9 @@ C.Assets.prototype.prepareSpriteCutouts = function prepareSpriteCutoutsV16() {
   }
 };
 
-// Jogging/trote: ciclo inteiro mais longo que a corrida anterior.
-// 300 px/ciclo => ~0,90 s em Namek e ~0,70 s na fase 5.
-// Isso produz ~8,9 -> 11,5 mudanças de pose por segundo, adequado ao corpo mais
-// ereto e braços relaxados da nova arte.
-if (!C.__runCadencePatched) {
-  const BASE_RUN_STRIDE = C.RUN_STRIDE;
-  const RUN_CYCLE_DISTANCE = 300;
-  const cadenceRatio = BASE_RUN_STRIDE / RUN_CYCLE_DISTANCE;
-  const originalPlayerUpdate = C.Player.prototype.update;
-
-  C.RUN_STRIDE = RUN_CYCLE_DISTANCE;
-  C.__runCadencePatched = true;
-
-  C.Player.prototype.update = function updateWithJogCadence(dt, track, speed) {
-    const beforeRunTime = this.runTime;
-    const beforeFrame = Math.floor(beforeRunTime) % 8;
-    const result = originalPlayerUpdate.call(this, dt, track, speed);
-
-    const rawDelta = (this.runTime - beforeRunTime + 8) % 8;
-    if (rawDelta > 0 && rawDelta < 1) {
-      this.runTime = (beforeRunTime + rawDelta * cadenceRatio) % 8;
-      const nextFrame = Math.floor(this.runTime) % 8;
-      result.stepped = beforeFrame !== nextFrame && (nextFrame === 0 || nextFrame === 4);
-    }
-
-    return result;
-  };
-}
+// Cadência definida no núcleo (RUN_STRIDE=255): ~10,5 FPS em Namek e ~13,5 FPS
+// na fase 5. Como o relógio deriva da distância, pernas e terreno não perdem
+// a sincronização mesmo quando o FPS de renderização oscila.
 
 // Mantém a correção de emenda do terreno já validada nos gates de flicker.
 const originalPrepareGround = C.Assets.prototype.prepareGround;

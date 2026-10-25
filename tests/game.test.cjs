@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { Player, Track, Enemy, Friend, Game, Assets, PHASES, JUMP_FRAMES, RUN_FRAMES,
   overlap, GROUND, PLAYER_HEIGHT, PATHS, FRIEND_FRAMES, panoramaWindow,
-  RUN_PIVOTS, JUMP_PIVOTS, SOLDIER_FRAMES, FLIGHT_FRAMES } = require('../js/game.js');
+  RUN_PIVOTS, JUMP_PIVOTS, SOLDIER_FRAMES, FLIGHT_FRAMES, RUN_STRIDE } = require('../js/game.js');
 
 function makeGame() {
   const game = Object.create(Game.prototype);
@@ -186,11 +186,21 @@ test('jump has a shorter falling phase and reports a finite landing impulse', ()
 
 test('run cycle advances all eight poses and cadence follows distance, not display FPS', () => {
   for(const speed of [335,430]) {
-    const p=new Player(), track=new Track(), frames=new Set();
-    let steps=0;
-    for(let i=0;i<120;i++){ const r=p.update(1/120,track,speed);frames.add(p.frame);steps+=Number(r.stepped); }
-    assert.equal(frames.size,8); assert.ok(steps>=3 && steps<=4);
-    assert.ok(Math.abs(p.runTime-(speed/200*8)%8)<.000001);
+    const theoreticalFps=speed/RUN_STRIDE*8;
+    assert.ok(theoreticalFps>=10&&theoreticalFps<=14,
+      `cadence at ${speed}px/s must stay between 10 and 14 FPS; got ${theoreticalFps}`);
+
+    const samples=[];
+    for(const updateRate of [30,60,120]) {
+      const p=new Player(),track=new Track(),frames=new Set();
+      for(let i=0;i<updateRate*2;i++){p.update(1/updateRate,track,speed);frames.add(p.frame);}
+      assert.equal(frames.size,8);
+      samples.push(p.runTime);
+    }
+    const expected=(speed*2/RUN_STRIDE*8)%8;
+    assert.ok(samples.every(runTime=>Math.abs(runTime-expected)<.000001));
+    assert.ok(Math.max(...samples)-Math.min(...samples)<.000001,
+      '30/60/120 Hz updates must produce the same distance-driven animation phase');
   }
 });
 

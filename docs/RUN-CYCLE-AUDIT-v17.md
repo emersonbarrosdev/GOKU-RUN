@@ -8,6 +8,7 @@ Correção alvo:
 - braços em oposição às pernas;
 - torso estabilizado no eixo X;
 - pés alinhados a uma baseline comum;
-- cadência dinâmica de ~10,5 a 13 FPS entre fase 1 e fase 5;
+- cadência dinâmica de ~10,5 a 13,5 FPS entre fase 1 e fase 5;
+- ciclo calculado pela distância percorrida (255 px), mantendo pernas e terreno sincronizados independentemente do FPS de renderização;
 - pulo permanece separado;
 - CI deve reprovar regressões de ordem, jitter ou cadência.

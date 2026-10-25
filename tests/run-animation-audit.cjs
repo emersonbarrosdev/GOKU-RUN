@@ -62,7 +62,26 @@ const assert = require('node:assert/strict');
           bottomDy: next.bbox[3] - frame.bbox[3],
         };
       });
-      return { frames, transitions };
+
+      // Compare every rendered pair, not only frame numbers. This prevents an
+      // atlas with duplicated poses (rigid arms/legs) from passing the audit.
+      const differences = [];
+      for (let from = 0; from < 8; from++) {
+        for (let to = from + 1; to < 8; to++) {
+          let changedPixels = 0;
+          for (let y = 20; y < 145; y++) {
+            for (let x = 40; x < 120; x++) {
+              const a = (y * canvas.width + from * 160 + x) * 4;
+              const b = (y * canvas.width + to * 160 + x) * 4;
+              const delta = Math.abs(data[a] - data[b]) + Math.abs(data[a + 1] - data[b + 1]) +
+                Math.abs(data[a + 2] - data[b + 2]) + Math.abs(data[a + 3] - data[b + 3]);
+              if (delta >= 120) changedPixels++;
+            }
+          }
+          differences.push({ from, to, changedPixels });
+        }
+      }
+      return { frames, transitions, differences };
     });
 
     console.log('RUN_ANIMATION_AUDIT ' + JSON.stringify(result));
@@ -72,6 +91,7 @@ const assert = require('node:assert/strict');
     const maxTorsoJump = Math.max(...result.transitions.map(t => Math.abs(t.torsoDx)));
     const bottoms = result.frames.map(frame => frame.bbox[3]);
     const bottomSpread = Math.max(...bottoms) - Math.min(...bottoms);
+    const minimumPoseDifference = Math.min(...result.differences.map(pair => pair.changedPixels));
 
     assert.ok(torsoSpread <= 1.5,
       `torso deve permanecer no mesmo eixo X no jogging; variação=${torsoSpread.toFixed(3)}px`);
@@ -79,6 +99,8 @@ const assert = require('node:assert/strict');
       `nenhuma troca pode teleportar o torso; maior salto=${maxTorsoJump.toFixed(3)}px`);
     assert.ok(bottomSpread <= 2,
       `baseline dos pés precisa permanecer estável; variação=${bottomSpread}px`);
+    assert.ok(minimumPoseDifference >= 350,
+      `todos os frames devem ser poses visualmente distintas; menor diferença=${minimumPoseDifference}px`);
 
     for (const frame of result.frames) {
       assert.ok(frame.bbox[3] >= 137 && frame.bbox[3] <= 139,
@@ -89,7 +111,7 @@ const assert = require('node:assert/strict');
         `frame ${frame.frame} precisa conter torso laranja suficiente`);
     }
 
-    console.log(`PASS: jogging alinhado (torso spread ${torsoSpread.toFixed(3)}px, salto ${maxTorsoJump.toFixed(3)}px, baseline ${bottomSpread}px).`);
+    console.log(`PASS: corrida alinhada e 8 poses distintas (torso ${torsoSpread.toFixed(3)}px, salto ${maxTorsoJump.toFixed(3)}px, baseline ${bottomSpread}px, diferença mínima ${minimumPoseDifference}px).`);
   } finally {
     await browser.close();
   }

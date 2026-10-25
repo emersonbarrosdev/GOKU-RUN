@@ -1,6 +1,9 @@
 (() => {
   "use strict";
-  const RUN_STRIDE = 200;
+  // One complete eight-pose cycle per 255 world pixels. Because the animation
+  // clock advances from travelled distance, feet and terrain stay locked while
+  // the five phase speeds naturally produce 10.5-13.5 visual FPS.
+  const RUN_STRIDE = 255;
 
   const W = 1280, H = 720, GROUND = 560;
   const PHASE_SECONDS = 30, PLAYER_HEIGHT = 108;
