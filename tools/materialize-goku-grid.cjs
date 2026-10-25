@@ -5,7 +5,7 @@ const crypto = require('node:crypto');
 const root = path.resolve(__dirname, '..');
 const partsDir = path.join(root, 'assets', 'spritesheets', 'goku_action_grid_v1.base64');
 const output = path.join(root, 'assets', 'spritesheets', 'goku_action_grid_v1.png');
-const expectedSha = 'fc4ac52c3ef763d663ae8616389b61b3f7a73d58ea85879b5d2a60be7f292e20';
+const expectedSha = '753d0c19b8fd4eeca6fccff5c3422823e571ab2bf812c9f7a73c642943093a3f';
 
 const parts = fs.readdirSync(partsDir)
   .filter(name => /^part\d+\.txt$/.test(name))
