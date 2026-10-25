@@ -1,24 +1,14 @@
-// Node preload: espelha os assets/pivôs visuais v15 usados no navegador.
-// A cadência de runtime continua validada nos testes de navegador, porque o
-// núcleo Node mantém RUN_STRIDE=200 como contrato físico histórico.
+// Node preload: espelha paths, grid e pivôs visuais v16.
+// O Node não renderiza pixels; os gates de navegador validam a escala real.
 const C = require('./game.js');
 const replace = (target, values) => target.splice(0, target.length, ...values);
 
 Object.assign(C.PATHS, {
-  run: './assets/spritesheets/goku_stride_v8.png',
+  run: './assets/spritesheets/goku_jog_run_v1.png',
   jump: './assets/spritesheets/goku_stride_v8.png',
 });
 
-replace(C.RUN_FRAMES, [
-  [35,7,285,331],
-  [448,16,247,323],
-  [794,9,260,330],
-  [1209,8,295,317],
-  [31,364,287,316],
-  [448,364,247,319],
-  [820,355,242,326],
-  [1217,358,292,310],
-]);
+replace(C.RUN_FRAMES, Array.from({ length: 8 }, (_, frame) => [frame * 48, 0, 48, 96]));
 
 replace(C.JUMP_FRAMES, [
   [102,730,202,282],
@@ -28,14 +18,14 @@ replace(C.JUMP_FRAMES, [
 ]);
 
 replace(C.RUN_PIVOTS, [
-  [191,338],
-  [571,339],
-  [929,339],
-  [1349,339],
-  [180,680],
-  [568,683],
-  [959,681],
-  [1355,681],
+  [23.864,90],
+  [71.820,90],
+  [119.682,90],
+  [167.661,90],
+  [215.897,90],
+  [264.036,90],
+  [311.697,90],
+  [359.378,90],
 ]);
 
 replace(C.JUMP_PIVOTS, [
@@ -45,7 +35,9 @@ replace(C.JUMP_PIVOTS, [
   [1340,1013],
 ]);
 
-C.PLAYER_SCALE.run = 108 / 331;
-C.PLAYER_SCALE.jump = 108 / 331;
+// O teste Node histórico compara apenas a unidade lógica de escala entre
+// estados e não rasteriza os PNGs. A escala visual real é validada no Gate D.
+C.PLAYER_SCALE.run = 108 / 80;
+C.PLAYER_SCALE.jump = 108 / 80;
 
 module.exports = C;
