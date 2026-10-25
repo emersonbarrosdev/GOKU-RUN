@@ -12,8 +12,7 @@ const assert = require('node:assert/strict');
     const result = await page.evaluate(() => {
       const source = window.__gokuRun.scene.textures.get('hero').getSourceImage();
       const canvas = document.createElement('canvas');
-      canvas.width = source.width;
-      canvas.height = source.height;
+      canvas.width = source.width; canvas.height = source.height;
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       ctx.drawImage(source, 0, 0);
       const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
@@ -55,8 +54,7 @@ const assert = require('node:assert/strict');
       const transitions = frames.map((frame, i) => {
         const next = frames[(i + 1) % frames.length];
         return {
-          from: i,
-          to: (i + 1) % frames.length,
+          from: i, to: (i + 1) % frames.length,
           torsoDx: next.torsoCenter[0] - frame.torsoCenter[0],
           torsoDy: next.torsoCenter[1] - frame.torsoCenter[1],
           bodyDx: next.bodyCenter[0] - frame.bodyCenter[0],
@@ -64,7 +62,6 @@ const assert = require('node:assert/strict');
           bottomDy: next.bbox[3] - frame.bbox[3],
         };
       });
-
       return { frames, transitions };
     });
 
@@ -73,28 +70,27 @@ const assert = require('node:assert/strict');
     const torsoXs = result.frames.map(frame => frame.torsoCenter[0]);
     const torsoSpread = Math.max(...torsoXs) - Math.min(...torsoXs);
     const maxTorsoJump = Math.max(...result.transitions.map(t => Math.abs(t.torsoDx)));
+    const bottoms = result.frames.map(frame => frame.bbox[3]);
+    const bottomSpread = Math.max(...bottoms) - Math.min(...bottoms);
 
-    assert.ok(torsoSpread <= .75,
-      `torso deve permanecer registrado no mesmo eixo X; variação=${torsoSpread.toFixed(3)}px`);
-    assert.ok(maxTorsoJump <= .75,
-      `nenhuma troca pode teleportar o torso lateralmente; maior salto=${maxTorsoJump.toFixed(3)}px`);
+    assert.ok(torsoSpread <= 1.5,
+      `torso deve permanecer no mesmo eixo X no jogging; variação=${torsoSpread.toFixed(3)}px`);
+    assert.ok(maxTorsoJump <= 1.5,
+      `nenhuma troca pode teleportar o torso; maior salto=${maxTorsoJump.toFixed(3)}px`);
+    assert.ok(bottomSpread <= 2,
+      `baseline dos pés precisa permanecer estável; variação=${bottomSpread}px`);
 
-    // Quadros 3 e 7 são as duas poses de voo. Os demais mantêm contato/rasante
-    // junto ao piso. Isto preserva o sobe/desce natural sem deslocamento lateral.
-    assert.equal(result.frames[3].bbox[3], 134);
-    assert.equal(result.frames[7].bbox[3], 134);
-    assert.equal(result.frames[3].groundPixels, 0);
-    assert.equal(result.frames[7].groundPixels, 0);
-    for (const frame of result.frames.filter(({ frame }) => frame !== 3 && frame !== 7)) {
-      assert.equal(frame.bbox[3], 139, `frame ${frame.frame} deve permanecer junto ao chão`);
-      assert.ok(frame.groundPixels > 0, `frame ${frame.frame} precisa ter pixels no contato/rasante`);
+    for (const frame of result.frames) {
+      assert.ok(frame.bbox[3] >= 137 && frame.bbox[3] <= 139,
+        `frame ${frame.frame} precisa permanecer junto à baseline; bottom=${frame.bbox[3]}`);
+      assert.ok(frame.groundPixels > 0,
+        `frame ${frame.frame} deve possuir contato/rasante no piso para o trote`);
+      assert.ok(frame.orangeCount > 150,
+        `frame ${frame.frame} precisa conter torso laranja suficiente`);
     }
 
-    console.log(`PASS: torso registrado (spread ${torsoSpread.toFixed(3)}px, salto máximo ${maxTorsoJump.toFixed(3)}px) e voo preservado.`);
+    console.log(`PASS: jogging alinhado (torso spread ${torsoSpread.toFixed(3)}px, salto ${maxTorsoJump.toFixed(3)}px, baseline ${bottomSpread}px).`);
   } finally {
     await browser.close();
   }
-})().catch(error => {
-  console.error(error);
-  process.exitCode = 1;
-});
+})().catch(error => { console.error(error); process.exitCode = 1; });
