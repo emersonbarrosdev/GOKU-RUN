@@ -104,3 +104,26 @@ jobs:
       - name: Verify lockfile remains unchanged
         shell: pwsh
         run: git diff --exit-code -- package-lock.json
+
+  cloudflare-compatibility:
+    name: Cloudflare npm 10 compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.1
+          cache: npm
+
+      - name: Match Cloudflare npm
+        run: npm install --global npm@10.9.2
+
+      - name: Cloudflare clean install
+        run: npm ci --no-audit --no-fund
+
+      - name: Cloudflare production build
+        run: npm run build
