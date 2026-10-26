@@ -1,23 +1,31 @@
-// Ordem explícita: núcleo -> configuração visual v13 -> narrativa -> Phaser.
-//
-// A narrativa precisa registrar o bloqueio do botão/teclado ANTES de main.js
-// criar a cena. Assim o jogador nunca consegue entrar na corrida antes da
-// introdução terminar de carregar.
 import './game.js';
 import './goku-visual-config.js';
 
-const params = new URLSearchParams(location.search);
-const qaMode = params.get('debug') === '1' || params.get('autostart') === '1';
+let activeRuntime;
 
-async function boot() {
-  // Os modos automatizados continuam sem narrativa para preservar os testes
-  // determinísticos do runtime principal.
-  if (!qaMode) await import('./story-runtime.js');
-  await import('./main.js');
+export async function bootGame(uiBridge) {
+  if (activeRuntime) return activeRuntime;
+  const params = new URLSearchParams(location.search);
+  const qaMode = params.get('debug') === '1' || params.get('autostart') === '1';
+  // Importar a narrativa primeiro registra o bloqueio do menu antes da cena.
+  const storyModule = qaMode ? null : await import('./story-runtime.js');
+  const { createRunnerGame } = await import('./main.js');
+  const runner = createRunnerGame(uiBridge);
+  let stopStory = () => {}, destroyed = false;
+
+  activeRuntime = {
+    start:()=>runner.start(),pause:()=>runner.pause(),activateKi:()=>runner.activateKi(),toggleSound:()=>runner.toggleSound(),
+    destroy() {
+      destroyed = true;
+      stopStory();
+      runner.destroy();
+      activeRuntime = undefined;
+    },
+  };
+  // A interface Angular recebe o runtime imediatamente. A narrativa aguarda o
+  // menu e a cena em paralelo, com o bloqueio de início já registrado.
+  storyModule?.bootStoryRuntime()
+    .then(cleanup=>{if(destroyed)cleanup();else stopStory=cleanup;})
+    .catch(error=>console.error(error));
+  return activeRuntime;
 }
-
-boot().catch(error => {
-  console.error(error);
-  const subtitle = document.getElementById('panel-subtitle');
-  if (subtitle) subtitle.textContent = 'Falha ao iniciar o jogo. Recarregue a página.';
-});

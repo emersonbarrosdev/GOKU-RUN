@@ -1,0 +1,56 @@
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "newProjectRoot": "projects",
+  "projects": {
+    "goku-run": {
+      "projectType": "application",
+      "root": "",
+      "sourceRoot": "src",
+      "prefix": "app",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "outputPath": { "base": "dist", "browser": "" },
+            "index": "src/index.html",
+            "browser": "src/main.ts",
+            "tsConfig": "tsconfig.app.json",
+            "baseHref": "./",
+            "styles": ["src/styles.css"],
+            "assets": [
+              { "glob": "**/*", "input": "assets/backgrounds", "output": "assets/backgrounds" },
+              { "glob": "**/*", "input": "assets/game", "output": "assets/game" },
+              { "glob": "**/*", "input": "assets/sfx", "output": "assets/sfx" },
+              { "glob": "**/*", "input": "assets/sounds", "output": "assets/sounds" },
+              { "glob": "**/*", "input": "assets/ui", "output": "assets/ui" },
+              { "glob": "enemies_fullbody_v7.png", "input": "assets/spritesheets", "output": "assets/spritesheets" },
+              { "glob": "friends_motion_v4.png", "input": "assets/spritesheets", "output": "assets/spritesheets" },
+              { "glob": "ground_enemy_sheet.png", "input": "assets/spritesheets", "output": "assets/spritesheets" }
+            ]
+          },
+          "configurations": {
+            "production": {
+              "optimization": true,
+              "outputHashing": "all",
+              "sourceMap": false
+            },
+            "development": {
+              "optimization": false,
+              "sourceMap": true
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "configurations": {
+            "production": { "buildTarget": "goku-run:build:production" },
+            "development": { "buildTarget": "goku-run:build:development" }
+          },
+          "defaultConfiguration": "development"
+        }
+      }
+    }
+  }
+}

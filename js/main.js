@@ -2,44 +2,36 @@ import Phaser from 'phaser';
 import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';
 import './game.js';
-import '../css/mobile.css';
 import { PLAYER_ART, loadNativePlayer, NativePlayer } from './native-player.mjs';
-
-const useNativePlayer = PLAYER_ART.releaseReady;
 
 const C=window.GokuCore,{Game,Player,Track,Assets,PATHS,SFX,GROUND}=C;
 const $=id=>document.getElementById(id);
 const FIXED_STEP=1/60,MAX_CATCH_UP_STEPS=3,MAX_FRAME_DELTA=FIXED_STEP*MAX_CATCH_UP_STEPS;
-const ui={hud:$('hud'),panel:$('panel'),title:$('panel-title'),subtitle:$('panel-subtitle'),start:$('start-button'),
-  score:$('score'),result:$('result-score'),phase:$('phase-label'),name:$('phase-name'),progress:$('phase-fill'),
-  ki:$('ki-button'),kiFill:$('ki-fill'),kiCaption:$('ki-caption'),kiLabel:$('ki-label'),banner:$('phase-banner')};
-const hearts=[...document.querySelectorAll('.lives span')],livesLabel=document.querySelector('.lives');
-const setText=(node,value)=>{if(node.textContent!==value)node.textContent=value;};
-const setAttr=(node,name,value)=>{if(node.getAttribute(name)!==value)node.setAttribute(name,value);};
-const setWidth=(node,value)=>{if(node.style.width!==value)node.style.width=value;};
 
 class RunnerScene extends Phaser.Scene {
-  constructor(){
+  constructor(uiBridge){
     super('runner');
+    this.ui=uiBridge;
     this.accumulator=0;this.views=new Map();this.lastState='';
     this.aliveViews=new Set();this.particleColors=new Map();
     this.backgroundWidths=C.PANELS.map(([,,w,h])=>w*720/h);
   }
   preload(){
     for(const [key,url] of Object.entries(PATHS)) {
-      if (useNativePlayer && ['run','jump','terrain'].includes(key)) continue;
+      if (['run','jump','terrain'].includes(key)) continue;
       this.load.image(key,url);
     }
-    if (useNativePlayer) loadNativePlayer(this);
+    loadNativePlayer(this);
     for(const [key,file] of Object.entries(SFX))this.load.audio('sfx-'+key,'./assets/sfx/'+file+'.wav');
     this.load.audio('music',['./assets/sounds/trilha.ogg','./assets/sounds/trilha.mp3']);
-    this.load.on('progress',p=>{ui.subtitle.textContent='Carregando… '+Math.round(p*100)+'%';});
-    this.load.on('loaderror',file=>{ui.subtitle.textContent='Não foi possível carregar '+file.key+'. Reabra o jogo.';});
+    this.load.on('progress',p=>this.ui.render({subtitle:'Carregando… '+Math.round(p*100)+'%'}));
+    this.load.on('loaderror',file=>this.ui.render({subtitle:'Não foi possível carregar '+file.key+'. Reabra o jogo.'}));
   }
   create(){
+    this.domAbort=new AbortController();
     this.art=new Assets();
     this.art.images=Object.fromEntries(Object.keys(PATHS).filter(k=>this.textures.exists(k)).map(k=>[k,this.textures.get(k).getSourceImage()]));
-    this.art.prepareSpriteCutouts();if(!useNativePlayer)this.art.prepareGround();this.makeTextures();
+    this.art.prepareSpriteCutouts();this.makeTextures();
     this.model=Object.create(Game.prototype);const g=this.model;
     g.player=new Player();g.track=new Track();g.best=0;
     try{g.best=Number(localStorage.getItem('goku-run-v5-best'))||0;}catch{}
@@ -53,26 +45,31 @@ class RunnerScene extends Phaser.Scene {
     this.world.add([this.background,this.previous]);
     this.groundLayer=this.add.container(0,0);this.world.add(this.groundLayer);
     this.effects=this.add.graphics();this.world.add(this.effects);
-    if(useNativePlayer){
-      this.nativePlayer=new NativePlayer(this,g.player,GROUND);
-      g.player.motionDriver=this.nativePlayer;
-      this.hero=this.nativePlayer.sprite;
-    }else{
-      this.hero=this.add.sprite(235,GROUND,'hero',0).setOrigin(.5,140/160);this.world.add(this.hero);
-    }
+    this.nativePlayer=new NativePlayer(this,g.player,GROUND);
+    g.player.motionDriver=this.nativePlayer;
+    this.hero=this.nativePlayer.sprite;
     this.foreground=this.add.graphics();this.world.add(this.foreground);
     this.labels=Array.from({length:10},()=>this.add.text(0,0,'',{fontFamily:'Arial',fontSize:'14px',fontStyle:'bold',stroke:'#142434',strokeThickness:3}).setOrigin(.5).setVisible(false));
     this.world.add(this.labels);
     this.menu=this.add.image(0,0,'menu').setOrigin(0).setDisplaySize(1280,720);
     this.bindInputs();
-    this.game.events.on(Phaser.Core.Events.BLUR,()=>this.pauseRun());
-    this.game.events.on(Phaser.Core.Events.HIDDEN,()=>this.pauseRun());
-    document.addEventListener('visibilitychange',()=>{if(document.hidden)this.pauseRun();});
-    window.addEventListener('resize',()=>{if(this.isPortrait())this.pauseRun();});
+    this.pauseOnBlur=()=>this.pauseRun();
+    this.game.events.on(Phaser.Core.Events.BLUR,this.pauseOnBlur);
+    this.game.events.on(Phaser.Core.Events.HIDDEN,this.pauseOnBlur);
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)this.pauseRun();},{signal:this.domAbort.signal});
+    window.addEventListener('resize',()=>{if(this.isPortrait())this.pauseRun();},{signal:this.domAbort.signal});
     if(Capacitor.isNativePlatform()){
-      App.addListener('appStateChange',({isActive})=>{if(!isActive)this.pauseRun();});
-      App.addListener('backButton',()=>{if(g.state==='playing')this.pauseRun();else if(g.state==='paused'){g.state='menu';g.audio.stopMusic();}else App.exitApp();});
+      this.capacitorListeners=Promise.all([
+        App.addListener('appStateChange',({isActive})=>{if(!isActive)this.pauseRun();}),
+        App.addListener('backButton',()=>{if(g.state==='playing')this.pauseRun();else if(g.state==='paused'){g.state='menu';g.audio.stopMusic();}else App.exitApp();}),
+      ]);
     }
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN,()=>{
+      this.domAbort.abort();
+      this.game.events.off(Phaser.Core.Events.BLUR,this.pauseOnBlur);
+      this.game.events.off(Phaser.Core.Events.HIDDEN,this.pauseOnBlur);
+      this.capacitorListeners?.then(handles=>handles.forEach(handle=>handle.remove()));
+    });
     const params=new URLSearchParams(location.search);
     if(params.get('debug')==='1'){g.persistResults=false;window.__gokuRun={game:g,core:C,scene:this,phaser:this.game};}
     if(params.get('autostart')==='1')this.startRun();
@@ -88,23 +85,14 @@ class RunnerScene extends Phaser.Scene {
       const texture=this.textures.addCanvas(key,surface);
       frames.forEach((_,i)=>texture.add(i,0,(i%columns)*160,Math.floor(i/columns)*160,160,160));
     };
-    if(!useNativePlayer)atlas('hero',[...C.RUN_FRAMES.map((bounds,i)=>({key:'run',bounds,pivot:C.RUN_PIVOTS[i],scale:C.PLAYER_SCALE.run})),
-      ...C.JUMP_FRAMES.map((bounds,i)=>({key:'jump',bounds,pivot:C.JUMP_PIVOTS[i],scale:C.PLAYER_SCALE.jump}))]);
     atlas('soldier',C.SOLDIER_FRAMES.map((bounds,i)=>({key:'enemies',bounds,pivot:C.SOLDIER_PIVOTS[i],scale:.23})));
     atlas('flyer',C.FLIGHT_FRAMES.map((bounds,i)=>({key:'enemies',bounds,pivot:C.FLIGHT_PIVOTS[i],scale:.23})));
     const allies=document.createElement('canvas');allies.width=12*160;allies.height=160;const ac=allies.getContext('2d');
     C.FRIEND_FRAMES.forEach((bounds,i)=>{const variant=Math.floor(i/4),h=bounds[3]/[393,474,306][variant]*[101,122,72][variant];this.art.sprite(ac,'friends',bounds,i*160+80,140,h);});
     const allyTexture=this.textures.addCanvas('allies',allies);C.FRIEND_FRAMES.forEach((_,i)=>allyTexture.add(i,0,i*160,0,160,160));
-    this.art.groundTiles?.forEach((tile,i)=>this.textures.addCanvas('terrain-'+i,tile));
-    this.art.groundCaps?.forEach((caps,i)=>{
-      this.textures.addCanvas('terrain-cap-left-'+i,caps.left);
-      this.textures.addCanvas('terrain-cap-right-'+i,caps.right);
-    });
     for(const [name,bounds] of [['crystal',[1109,627,341,372]],['boulder',[1627,690,329,308]]])this.textures.get('ground').add(name,0,...bounds);
     const orb=document.createElement('canvas');orb.width=48;orb.height=48;const oc=orb.getContext('2d');
     const glow=oc.createRadialGradient(20,18,1,24,24,23);glow.addColorStop(0,'#fffce3');glow.addColorStop(.42,'#ffdd76');glow.addColorStop(.65,'#ed982c');glow.addColorStop(1,'rgba(255,190,60,0)');oc.fillStyle=glow;oc.fillRect(0,0,48,48);this.textures.addCanvas('orb',orb);
-    // Fallback legado; o player ativo usa a animação nativa de NativePlayer.
-    if(!useNativePlayer)this.anims.create({key:'run',frames:this.anims.generateFrameNumbers('hero',{start:0,end:C.RUN_FRAMES.length-1}),frameRate:335/C.RUN_STRIDE*C.RUN_FRAMES.length,repeat:-1});
     for(let i=0;i<3;i++)this.anims.create({key:'ally-'+i,frames:[0,1,2,3,2,1].map(n=>({key:'allies',frame:i*4+n})),frameRate:[5,4,6][i],repeat:-1});
   }
   bindInputs(){
@@ -115,15 +103,11 @@ class RunnerScene extends Phaser.Scene {
       if([' ','arrowup','w'].includes(key)){event.preventDefault();if(g.state==='playing')g.player.queueJump();else if(['menu','game-over','victory'].includes(g.state))this.startRun();else if(g.state==='paused')this.resumeRun();}
       else if(key==='k')g.activateKi();else if(key==='p')g.state==='playing'?this.pauseRun():this.resumeRun();else if(key==='m')this.toggleSound();
     });
-    ui.start.addEventListener('click',()=>{if(g.state==='paused')this.resumeRun();else this.startRun();});
-    $('pause-button').addEventListener('click',()=>this.pauseRun());
-    ui.ki.addEventListener('pointerdown',event=>{event.preventDefault();event.stopPropagation();g.activateKi();});
-    $('sound-button').addEventListener('click',()=>this.toggleSound());
   }
   startRun(){if(this.isPortrait())return;this.sound.context?.resume();this.model.start();this.accumulator=0;this.lastState='';}
   pauseRun(){if(this.model?.state==='playing'){this.model.state='paused';this.nativePlayer?.sprite.anims.pause();this.music.pause();this.sound.pauseAll();}}
   resumeRun(){if(this.model.state!=='paused'||this.isPortrait())return;this.model.state='playing';this.sound.resumeAll();if(this.model.audio.enabled)this.music.resume();this.accumulator=0;}
-  toggleSound(){this.model.audio.toggle();$('sound-button').textContent=this.model.audio.enabled?'SOM LIGADO':'SOM DESLIGADO';}
+  toggleSound(){this.model.audio.toggle();}
   update(time,delta){
     if(!this.model)return;const g=this.model;
     if(g.state==='playing'){
@@ -165,12 +149,7 @@ class RunnerScene extends Phaser.Scene {
     }
 
     // O player ativo usa apenas o relógio de animação nativo do Phaser.
-    if(this.nativePlayer)this.nativePlayer.render(playing);
-    else{
-      this.hero.setPosition(p.x,p.foot).setAlpha(1).stop();
-      if(p.hurtTime>0)this.hero.setTint(0xffb6a3);else this.hero.clearTint();
-      this.hero.setFrame(p.grounded&&p.landTime<=0?p.frame:C.RUN_FRAMES.length+p.frame);
-    }
+    this.nativePlayer.render(playing);
 
     const alive=this.aliveViews;alive.clear();
     const view=(entity,key)=>{alive.add(entity);let v=this.views.get(entity);if(!v){v=this.add.sprite(0,0,key,0).setOrigin(.5,140/160);this.world.add(v);this.world.bringToTop(this.foreground);this.labels.forEach(l=>this.world.bringToTop(l));this.views.set(entity,v);}return v;};
@@ -201,34 +180,49 @@ class RunnerScene extends Phaser.Scene {
   }
   syncUI(){
     const g=this.model,p=g.player,state=g.state;
-    if(this.lastState!==state){
-      this.lastState=state;ui.panel.hidden=state==='playing';ui.panel.dataset.mode=state;
-      ui.hud.hidden=state==='menu';ui.ki.hidden=state!=='playing';ui.start.hidden=false;
-      ui.start.textContent=state==='menu'?'JOGAR':state==='paused'?'CONTINUAR':'CORRER NOVAMENTE';
-      ui.title.textContent=state==='menu'?'':state==='paused'?'PAUSADO':state==='victory'?'VOCÊ CONSEGUIU!':'VAMOS TENTAR DE NOVO?';
-      ui.subtitle.textContent=state==='menu'?'Cinco mundos para explorar. Pule os obstáculos e cuide dos amigos.':state==='paused'?'Sua aventura está esperando.':state==='victory'?'Você atravessou os cinco mundos!':'Aliados: pule por cima. Voadores: passe por baixo.';
-      ui.result.textContent=['victory','game-over'].includes(state)?Math.floor(g.score)+' PONTOS':'';
-      $('instructions').textContent=matchMedia('(pointer:coarse)').matches?'Toque para pular · Toque outra vez no ar':'Espaço ou clique para pular · Pulo duplo';
-    }
-    setText(ui.score,String(Math.floor(g.score)).padStart(5,'0'));
-    hearts.forEach((node,i)=>node.classList.toggle('empty',i>=p.lives));setAttr(livesLabel,'aria-label',p.lives+' vidas');
-    setText(ui.phase,'FASE '+(g.phaseIndex+1)+' / 5');setText(ui.name,g.phase.name);
-    setWidth(ui.progress,Math.min(100,g.phaseTime/30*100).toFixed(2)+'%');
-    setWidth(ui.kiFill,(p.kiActive?p.kiTime/6*100:p.charge).toFixed(1)+'%');
-    ui.ki.classList.toggle('ready',p.kiReady);ui.ki.classList.toggle('active',p.kiActive);
-    setText(ui.kiLabel,p.kiActive?'×3':'KI');setText(ui.kiCaption,p.kiActive?'RESERVA '+Math.round(p.reserve)+'%':p.kiReady?'TOQUE AQUI':Math.round(p.charge)+'%');
-    setAttr(ui.ki,'aria-label',p.kiReady?'Ativar KI':p.kiActive?'KI ativo, pontos triplicados':'KI carregando '+Math.round(p.charge)+'%');
-    ui.banner.hidden=state!=='playing'||g.phaseBanner<=0;if(!ui.banner.hidden)setText(ui.banner,g.phase.name);
+    this.lastState=state;
+    this.ui.render({
+      state,panelHidden:state==='playing',hudHidden:state==='menu',kiHidden:state!=='playing',
+      startText:state==='menu'?'JOGAR':state==='paused'?'CONTINUAR':'CORRER NOVAMENTE',
+      title:state==='menu'?'':state==='paused'?'PAUSADO':state==='victory'?'VOCÊ CONSEGUIU!':'VAMOS TENTAR DE NOVO?',
+      subtitle:state==='menu'?'Cinco mundos para explorar. Pule os obstáculos e cuide dos amigos.':state==='paused'?'Sua aventura está esperando.':state==='victory'?'Você atravessou os cinco mundos!':'Aliados: pule por cima. Voadores: passe por baixo.',
+      result:['victory','game-over'].includes(state)?Math.floor(g.score)+' PONTOS':'',
+      instructions:matchMedia('(pointer:coarse)').matches?'Toque para pular · Toque outra vez no ar':'Espaço ou clique para pular · Pulo duplo',
+      score:String(Math.floor(g.score)).padStart(5,'0'),lives:p.lives,
+      phaseLabel:'FASE '+(g.phaseIndex+1)+' / 5',phaseName:g.phase.name,
+      progress:Math.min(100,g.phaseTime/30*100).toFixed(2)+'%',
+      kiFill:(p.kiActive?p.kiTime/6*100:p.charge).toFixed(1)+'%',kiReady:p.kiReady,kiActive:p.kiActive,
+      kiLabel:p.kiActive?'×3':'KI',
+      kiCaption:p.kiActive?'RESERVA '+Math.round(p.reserve)+'%':p.kiReady?'TOQUE AQUI':Math.round(p.charge)+'%',
+      kiAria:p.kiReady?'Ativar KI':p.kiActive?'KI ativo, pontos triplicados':'KI carregando '+Math.round(p.charge)+'%',
+      bannerHidden:state!=='playing'||g.phaseBanner<=0,banner:g.phase.name,
+      soundText:g.audio.enabled?'SOM LIGADO':'SOM DESLIGADO',
+    });
   }
 }
 
-const game=new Phaser.Game({type:Phaser.AUTO,parent:'game-container',width:1280,height:720,backgroundColor:'#102330',
-  physics:{default:'arcade',arcade:{customUpdate:true,gravity:{y:0},fps:60,fixedStep:true}},
-  render:{antialias:true,roundPixels:false,powerPreference:'high-performance'},
-  fps:{target:60,min:30,forceSetTimeOut:false,smoothStep:true},
-  scale:{mode:Phaser.Scale.FIT,autoCenter:Phaser.Scale.CENTER_BOTH},
-  input:{activePointers:2},audio:{disableWebAudio:false},scene:RunnerScene});
-const stageObserver=new ResizeObserver(()=>game.scale.refresh());
-stageObserver.observe($('stage'));
-game.events.once(Phaser.Core.Events.DESTROY,()=>stageObserver.disconnect());
-window.addEventListener('pagehide',()=>{game.scene.getScene('runner')?.pauseRun();});
+export function createRunnerGame(uiBridge={render(){}}){
+  const scene=new RunnerScene(uiBridge);
+  const game=new Phaser.Game({type:Phaser.AUTO,parent:'game-container',width:1280,height:720,backgroundColor:'#102330',
+    physics:{default:'arcade',arcade:{customUpdate:true,gravity:{y:0},fps:60,fixedStep:true}},
+    render:{antialias:true,roundPixels:false,powerPreference:'high-performance'},
+    fps:{target:60,min:30,forceSetTimeOut:false,smoothStep:true},
+    scale:{mode:Phaser.Scale.FIT,autoCenter:Phaser.Scale.CENTER_BOTH},
+    input:{activePointers:2},audio:{disableWebAudio:false},scene});
+  const stageObserver=new ResizeObserver(()=>game.scale.refresh());
+  stageObserver.observe($('stage'));
+  const pauseOnPageHide=()=>game.scene.getScene('runner')?.pauseRun();
+  window.addEventListener('pagehide',pauseOnPageHide);
+  return {
+    game,
+    start(){scene.model?.state==='paused'?scene.resumeRun():scene.startRun();},
+    pause(){scene.pauseRun();},
+    activateKi(){scene.model?.activateKi();},
+    toggleSound(){scene.toggleSound();},
+    destroy(){
+      window.removeEventListener('pagehide',pauseOnPageHide);
+      stageObserver.disconnect();
+      game.destroy(true);
+    },
+  };
+}

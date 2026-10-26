@@ -1,4 +1,6 @@
-# Auditoria de corrida v19
+# Auditoria de corrida v19 — histórico, validação insuficiente
+
+Esta conclusão foi superada: comparar quantidade de pixels diferentes e limites de recorte não demonstrava alternância anatômica nem suavidade. O usuário confirmou a falha visual. Consulte a [auditoria v20](RUN-GROUND-AUDIT-v20.md), que mede trajetórias, comprimentos dos membros e o movimento das botas realmente renderizadas, além de fornecer comparação animada.
 
 O defeito encontrado no atlas v10 não era falta de FPS: as duas metades do ciclo repetiam quase a mesma leitura de pernas. As poses de passagem continuavam abertas e não mostravam a mesma perna viajando da frente para trás.
 

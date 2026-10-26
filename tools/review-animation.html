@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Goku Run — comparação da corrida e do chão</title>
+<style>body{margin:0;background:#101c29;color:#e9f0f5;font:16px system-ui}main{max-width:1100px;margin:30px auto;padding:0 20px}h1{font-size:24px}p{color:#9fb6ca}canvas{width:100%;border:1px solid #34485c;border-radius:12px}nav{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:18px 0}button,select{padding:10px;border:1px solid #50657a;border-radius:7px;background:#263a50;color:white}label{display:flex;gap:8px}a{color:#8ddfc2}</style>
+<main><h1>Corrida e terreno — antes / depois</h1><p>Mesma velocidade de mundo. Ampliação 2×; os círculos identificam os pés da animação nova, não alteram o sprite.</p>
+<nav><button id="play">Pausar</button><button id="step">Próximo quadro novo</button><label>Reprodução <select id="rate"><option value="1">Normal</option><option value=".25">¼ — câmera lenta</option></select></label><label><input id="joints" type="checkbox" checked>Identificar pés</label><a href="/?debug=1">Abrir jogo</a></nav>
+<canvas id="comparison" width="1000" height="600"></canvas><p id="readout"></p>
+<p>Fonte artística: modelos autorais, exportados em uma folha PNG. Referências: <a href="https://www.slynyrd.com/blog/2018/8/19/pixelblog-8-intro-to-animation">ciclos de jogos — SLYNYRD</a> · <a href="https://docs.phaser.io/phaser/concepts/animations">animações — Phaser</a>.</p></main>
+<script>
+(async()=>{
+  const load=async url=>{const i=new Image();i.src=url;await i.decode();return i;};
+  const [oldArt,newArt,oldTerrain,terrain,motion]=await Promise.all([
+    load('../assets/spritesheets/goku_run_v11.png'),load('../assets/spritesheets/goku_run_v12.png'),
+    load('../assets/spritesheets/terrain_ground_v4.png'),load('../assets/spritesheets/terrain_tiles_v5.png'),
+    fetch('../assets/spritesheets/goku_run_v12.motion.json').then(r=>r.json())]);
+  const canvas=document.querySelector('canvas'),c=canvas.getContext('2d');
+  const pivots=[[259,416],[781,411],[1297,419],[1801,418],[265,924],[795,924],[1300,933],[1810,908]];
+  const oldTile=document.createElement('canvas');oldTile.width=840;oldTile.height=164;
+  const tc=oldTile.getContext('2d');tc.drawImage(oldTerrain,0,0,420,164);tc.save();tc.translate(840,0);tc.scale(-1,1);tc.drawImage(oldTerrain,0,0,420,164);tc.restore();
+  let time=0,playing=true,last=0;
+  function draw(t){
+    c.fillStyle='#172b3b';c.fillRect(0,0,1000,600);
+    for(let panel=0;panel<2;panel++){
+      c.save();c.beginPath();c.rect(panel*500,0,500,600);c.clip();c.translate(panel*500,0);
+      c.fillStyle=panel?'#c7f1db':'#d8c9bd';c.font='bold 23px system-ui';c.fillText(panel?'DEPOIS · modelo único':'ANTES · poses independentes',24,42);
+      c.fillStyle='#99b1c4';c.font='15px system-ui';c.fillText(panel?'24 quadros · 180 px por ciclo':'8 quadros · 255 px por ciclo',24,70);
+      c.fillStyle='#203b4d';c.fillRect(0,315,500,60);
+      const distance=t*335;
+      if(panel===0){for(let x=-distance%840;x<500;x+=840)c.drawImage(oldTile,x,375);}
+      else {for(let x=-distance%256;x<500;x+=256)c.drawImage(terrain,64,0,256,164,x,375,256,164);}
+      c.strokeStyle='#aac8cc';c.lineWidth=1;c.beginPath();c.moveTo(0,375);c.lineTo(500,375);c.stroke();
+      if(panel===0){const i=Math.floor(distance/255*8)%8,sx=(i%4)*512,sy=Math.floor(i/4)*512,p=pivots[i],scale=108/321*2;
+        c.drawImage(oldArt,sx,sy,512,512,230+(sx-p[0])*scale,375+(sy-p[1])*scale,512*scale,512*scale);
+      }else{const i=Math.floor(distance/180*24)%24,sx=(i%6)*256,sy=Math.floor(i/6)*256;
+        c.drawImage(newArt,sx,sy,256,256,230-128,375-232,256,256);
+        if(document.querySelector('#joints').checked)for(let j=0;j<2;j++){
+          const leg=motion.poses[i].legs[j];c.strokeStyle=j?'#ff80ab':'#69dcff';c.lineWidth=2;c.beginPath();c.arc(230-128+leg.ankle[0],375-232+leg.ankle[1],7,0,Math.PI*2);c.stroke();
+          c.font='12px system-ui';c.fillStyle=c.strokeStyle;c.fillText(j?'D':'E',230-128+leg.ankle[0]-4,375-232+leg.ankle[1]-12);
+        }
+      }
+      c.fillStyle='#101c29';c.fillRect(0,539,500,61);c.fillStyle='#a7c1d3';c.font='14px system-ui';
+      c.fillText(panel?'Pés alternados; apoio acompanha o chão':'Membro próximo repetidamente à frente',24,569);
+      c.restore();
+    }
+    c.fillStyle='#506279';c.fillRect(499,0,2,600);
+    document.querySelector('#readout').textContent=`Tempo ${t.toFixed(2)}s · mundo ${(t*335).toFixed(1)}px · quadro novo ${Math.floor(t*335/180*24)%24+1}/24`;
+  }
+  document.querySelector('#play').onclick=()=>{playing=!playing;document.querySelector('#play').textContent=playing?'Pausar':'Reproduzir';};
+  document.querySelector('#step').onclick=()=>{playing=false;time+=180/335/24;draw(time);document.querySelector('#play').textContent='Reproduzir';};
+  window.review={draw:t=>{time=t;draw(t);},pause:()=>playing=false,ready:true};
+  function tick(now){if(playing)time+=Math.min((now-last)/1000,.05)*Number(document.querySelector('#rate').value);last=now;draw(time);requestAnimationFrame(tick);}requestAnimationFrame(tick);
+})();
+</script></html>

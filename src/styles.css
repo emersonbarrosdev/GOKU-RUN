@@ -1,0 +1,5 @@
+@import "../css/mobile.css";
+@import "../css/story.css";
+
+/* Angular owns lifecycle only; its host must not become a zero-sized flex item. */
+app-root { display: contents; }

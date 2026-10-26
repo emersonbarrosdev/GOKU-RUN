@@ -3,30 +3,39 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
-    "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0",
+    "dev": "ng serve --host 0.0.0.0 --port 5173",
+    "build": "ng build",
+    "preview": "ng serve --configuration production --host 0.0.0.0 --port 4173",
     "test": "node --require ./js/goku-visual-config.cjs --test tests/game.test.cjs tests/runtime-step.test.cjs && node --require ./js/goku-visual-config.cjs tests/playthrough.cjs",
     "art:import-gif": "node tools/import-run-gif.cjs",
     "test:browser": "node tests/browser-review.cjs",
     "test:mobile": "node tests/mobile-smoke.cjs",
-    "test:visual": "node tests/gif-fidelity.cjs",
+    "test:visual": "node tests/gif-fidelity.cjs && node tests/ground-fidelity.cjs",
     "test:story": "node tests/story-smoke.cjs",
-    "test:render": "node tests/native-player.cjs && node tests/gif-fidelity.cjs",
+    "test:render": "node tests/native-player.cjs && node tests/gif-fidelity.cjs && node tests/ground-fidelity.cjs",
     "test:player-native": "node tests/native-player.cjs",
     "android:sync": "npm run build && cap sync android",
     "android:open": "cap open android",
     "android:apk": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-android.ps1"
   },
   "dependencies": {
+    "@angular/common": "21.2.25",
+    "@angular/compiler": "21.2.25",
+    "@angular/core": "21.2.25",
+    "@angular/platform-browser": "21.2.25",
     "@capacitor/android": "8.5.3",
     "@capacitor/app": "8.0.1",
     "@capacitor/core": "8.5.3",
-    "phaser": "4.2.1"
+    "phaser": "4.2.1",
+    "rxjs": "7.8.2",
+    "tslib": "2.8.1"
   },
   "devDependencies": {
+    "@angular-devkit/build-angular": "21.2.28",
+    "@angular/cli": "21.2.28",
+    "@angular/compiler-cli": "21.2.25",
     "@capacitor/cli": "8.5.3",
     "playwright-core": "1.58.2",
-    "vite": "8.3.5"
+    "typescript": "5.9.3"
   }
 }

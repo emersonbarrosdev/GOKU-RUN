@@ -1,0 +1,35 @@
+<main id="stage" aria-label="Goku Run">
+  <div id="game-container"></div>
+  <section id="hud" [hidden]="ui().hudHidden" aria-label="Placar">
+    <div class="score"><small>PONTOS</small><strong id="score">{{ui().score}}</strong></div>
+    <div class="lives" [attr.aria-label]="ui().lives + ' vidas'"><span [class.empty]="ui().lives < 1">♥</span><span [class.empty]="ui().lives < 2">♥</span><span [class.empty]="ui().lives < 3">♥</span></div>
+    <div class="phase"><small id="phase-label">{{ui().phaseLabel}}</small><strong id="phase-name">{{ui().phaseName}}</strong><div class="progress"><i id="phase-fill" [style.width]="ui().progress"></i></div></div>
+    <button id="pause-button" class="icon-button" aria-label="Pausar" (click)="pause()">Ⅱ</button>
+  </section>
+  <button id="ki-button" [hidden]="ui().kiHidden" [class.ready]="ui().kiReady" [class.active]="ui().kiActive" [attr.aria-label]="ui().kiAria" (pointerdown)="$event.preventDefault(); $event.stopPropagation(); activateKi()"><span id="ki-label">{{ui().kiLabel}}</span><span class="ki-meter"><i id="ki-fill" [style.width]="ui().kiFill"></i></span><small id="ki-caption">{{ui().kiCaption}}</small></button>
+  <div id="panel" [hidden]="ui().panelHidden" [attr.data-mode]="ui().state"><section class="panel-card">
+    <h1 id="panel-title">{{ui().title}}</h1><p id="panel-subtitle">{{ui().subtitle}}</p>
+    <strong id="result-score">{{ui().result}}</strong>
+    <button id="start-button" type="button" [hidden]="ui().state === 'loading'" (click)="start()">{{ui().startText}}</button>
+    <button id="story-replay" type="button" hidden>VER HISTÓRIA</button>
+    <p id="instructions">{{ui().instructions}}</p>
+  </section><button id="sound-button" type="button" class="quiet-button" (click)="toggleSound()">{{ui().soundText}}</button></div>
+  <div id="phase-banner" [hidden]="ui().bannerHidden">{{ui().banner}}</div>
+  <section id="story-overlay" hidden aria-label="História de introdução">
+    <article class="story-card">
+      <div class="story-visual" aria-hidden="true"><div class="story-runner-frame"><div id="story-runner-preview"></div></div><div class="story-fruit"></div></div>
+      <div><small id="story-kicker" class="story-kicker"></small><h2 id="story-title"></h2><p id="story-text"></p>
+        <div class="story-actions"><button id="story-next" type="button">CONTINUAR</button><button id="story-skip" type="button">PULAR HISTÓRIA</button><span id="story-progress">1 / 3</span></div>
+      </div>
+    </article>
+  </section>
+  <section id="ending-overlay" hidden aria-label="Final da história">
+    <div id="ending-loading" class="ending-loading-box" hidden><div class="ending-spinner" aria-hidden="true"></div><strong>CARREGANDO A VERDADE…</strong><small>Tem alguma coisa estranha nessa energia.</small></div>
+    <article id="ending-dialogue" class="ending-dialogue" hidden><span class="ending-speaker">VEGETA</span>
+      <blockquote>“Kakarotto… você realmente acreditou que aquele fruto era proibido? Bulma só preparou um bloqueador de ki que durava um dia. A energia que você seguiu era nossa. Era o único jeito de fazer você chegar à festa sem voar e estragar a surpresa. Feliz aniversário, Kakarotto!”</blockquote>
+      <p>Os poderes de Goku voltaram. E, desta vez, ninguém deixou ele escolher o tamanho do bolo.</p><footer><button id="ending-replay" type="button">CORRER DE NOVO</button></footer>
+    </article>
+  </section>
+  <aside id="rotate-notice"><span>↻</span><strong>Vire o celular</strong><p>A aventura fica melhor com a tela deitada.</p></aside>
+</main>
+<footer>PC: Espaço / ↑ / W — pular · K — KI · P — pausa · M — som</footer>

@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import '../css/story.css';
 import { PLAYER_ART } from './native-player.mjs';
 
 const C = window.GokuCore;
@@ -228,7 +227,7 @@ async function beginEnding(scene) {
   replay.addEventListener('click', onReplay);return party;
 }
 
-async function bootStoryRuntime() {
+export async function bootStoryRuntime() {
   if (qaMode) return;
   await waitForMenuReady();
 
@@ -245,12 +244,18 @@ async function bootStoryRuntime() {
   // O final pode aguardar a cena Phaser sem bloquear a introdução.
   const scene = await waitForScene();
   let endingStarted = false;
+  let disposed = false, watchFrame = 0;
   const watch = () => {
+    if (disposed) return;
     if (!endingStarted && scene.model?.state === 'victory') { endingStarted = true;beginEnding(scene).catch(console.error); }
     if (scene.model?.state === 'playing') endingStarted = false;
-    requestAnimationFrame(watch);
+    watchFrame = requestAnimationFrame(watch);
   };
   watch();
+  return () => {
+    disposed = true;
+    cancelAnimationFrame(watchFrame);
+    if (replayStory) replayStory.onclick = null;
+    unlockStoryGate();
+  };
 }
-
-bootStoryRuntime().catch(error => { console.error(error);unlockStoryGate(); });

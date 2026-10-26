@@ -19,30 +19,36 @@ const fs=require('node:fs');
       // Isolate movement from enemies; still the actual runner scene and controls.
       g.encounterTimer=g.orbTimer=10000;
       g.track.segments=[{start:-1000,end:100000}];
-      const frames=new Set(),samples=[],loops=[];
+      const frames=new Set(),samples=[],loops=[];let maxEcho=0,maxAngle=0;
       const onLoop=()=>loops.push(performance.now());
       s.hero.on('animationrepeat',onLoop);
-      const onUpdate=()=>{frames.add(+s.hero.frame.name);samples.push({foot:p.foot,frame:+s.hero.frame.name});};
+      const onUpdate=()=>{frames.add(+s.hero.frame.name);samples.push({foot:p.foot,frame:+s.hero.frame.name});
+        maxEcho=Math.max(maxEcho,s.nativePlayer.echo.alpha);maxAngle=Math.max(maxAngle,Math.abs(s.hero.angle));};
       s.events.on('postupdate',onUpdate);
       await new Promise(r=>setTimeout(r,2200));s.events.off('postupdate',onUpdate);s.hero.off('animationrepeat',onLoop);
       const a=s.anims.get('goku-run');
       return {frames:[...frames].sort((a,b)=>a-b),fps:a.frameRate,repeat:a.repeat,
         count:a.frames.length,durations:a.frames.map(f=>f.duration||a.msPerFrame),texture:s.hero.texture.key,size:[s.hero.frame.width,s.hero.frame.height],
-        body:[s.hero.body.width,s.hero.body.height],scale:s.hero.scaleX,rate:s.hero.anims.timeScale,
+        body:[s.hero.body.width,s.hero.body.height],scale:s.hero.scaleX,rate:s.hero.anims.timeScale,maxEcho,maxAngle,
         loopMs:loops.slice(1).map((t,i)=>t-loops[i]),x:p.x,feet:samples.map(x=>x.foot),
         instances:document.querySelectorAll('#game-container canvas').length,
-        logical:[phaser.scale.width,phaser.scale.height],legacyHero:s.textures.exists('hero')};
+        logical:[phaser.scale.width,phaser.scale.height],legacyHero:s.textures.exists('hero'),
+        ground:{type:s.nativePlayer.floorViews[0]?.type,texture:s.nativePlayer.floorViews[0]?.texture.key,
+          top:s.nativePlayer.floorViews[0]?.body.top,height:s.nativePlayer.floorViews[0]?.height}};
     });
     assert.deepEqual(result.frames,Array.from({length:10},(_,i)=>i));
     assert.equal(result.fps,1000/30);assert.equal(result.repeat,-1);assert.equal(result.count,10);
     const sourceDurations=[30,30,30,40,40,30,30,30,40,40];
     assert.ok(result.durations.every((ms,i)=>Math.abs(ms-sourceDurations[i])<1e-9),'source frame durations must be preserved');
     assert.equal(result.texture,'goku-native');assert.equal(result.legacyHero,false);
+    assert.deepEqual(result.ground,{type:'TileSprite',texture:'ground-seamless',top:560,height:160});
     assert.deepEqual(result.size,[256,256]);assert.deepEqual(result.logical,[1280,720]);
     assert.equal(result.instances,1);assert.equal(result.x,280);
-    assert.equal(result.scale,.65);assert.equal(result.rate,.5);
+    assert.equal(result.scale,.65);assert.equal(result.rate,.62);
     assert.ok(Math.abs(result.body[0]-41.6)<.01&&Math.abs(result.body[1]-93.6)<.01);
-    assert.ok(result.loopMs.length>=1&&result.loopMs.every(ms=>ms>600&&ms<780),`actual loop must take approximately 680ms, not 340ms: ${JSON.stringify(result.loopMs)}`);
+    assert.ok(result.loopMs.length>=2&&result.loopMs.every(ms=>ms>500&&ms<600),`actual loop must take approximately 548ms: ${JSON.stringify(result.loopMs)}`);
+    assert.ok(result.maxEcho>.02&&result.maxEcho<=.141,'short previous-frame echo must soften swaps without ghosting');
+    assert.ok(result.maxAngle>.1&&result.maxAngle<=.33,'sub-degree torso sway must remain subtle');
     assert.ok(result.feet.every(y=>Math.abs(y-560)<.01),'Arcade foot baseline must not drift');
     const singleJump=async key=>{
       await page.keyboard.press(key);
@@ -75,6 +81,7 @@ const fs=require('node:fs');
       viewports.push({width,height,...rect});
     }
     await page.keyboard.press('p');
+    await page.waitForTimeout(80);
     await page.screenshot({path:'.local/task1/native-player-gameplay.png'});
     const mobile=await browser.newContext({viewport:{width:844,height:390},isMobile:true,hasTouch:true,deviceScaleFactor:2});
     const mp=await mobile.newPage();mp.on('pageerror',e=>errors.push(e.message));
