@@ -18,8 +18,8 @@ type UiState = {
 
 const initialUi: UiState = {
   state:'loading',panelHidden:false,hudHidden:true,kiHidden:true,startText:'JOGAR',title:'Preparando a aventura…',
-  subtitle:'Carregando os cinco mundos',result:'',instructions:'Toque na tela para pular · Toque de novo para pulo duplo',
-  score:'00000',lives:3,phaseLabel:'FASE 1 / 5',phaseName:'NAMEK',progress:'0%',kiFill:'0%',kiReady:false,
+  subtitle:'Carregando as sagas',result:'',instructions:'Toque na tela para pular · Toque de novo para pulo duplo',
+  score:'00000',lives:3,phaseLabel:'CAP. 1 · FASE 1/3',phaseName:'RADITZ',progress:'0%',kiFill:'0%',kiReady:false,
   kiActive:false,kiLabel:'KI',kiCaption:'0%',kiAria:'KI carregando 0%',bannerHidden:true,banner:'',soundText:'SOM LIGADO',
 };
 

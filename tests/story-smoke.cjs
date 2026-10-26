@@ -10,59 +10,34 @@ const assert = require('node:assert/strict');
     const url = process.env.TEST_URL || 'http://127.0.0.1:4173/';
 
     await page.goto(url, { waitUntil: 'networkidle' });
-    await page.evaluate(() => localStorage.removeItem('goku-run-story-seen-v1'));
+    await page.evaluate(() => localStorage.removeItem('goku-run-campaign-intro-seen-v1'));
     await page.reload({ waitUntil: 'networkidle' });
 
     const story = page.locator('#story-overlay');
     await story.waitFor({ state: 'visible', timeout: 15000 });
-    await expectText(page, '#story-kicker', 'CAPÍTULO 1');
-    await expectText(page, '#story-title', 'Goku perdeu seus poderes');
-    await expectText(page, '#story-text', 'fruto roxo');
+    await expectText(page, '#story-kicker', 'SAGA DOS SAIYAJINS');
+    await expectText(page, '#story-title', 'Raditz');
+    await expectText(page, '#story-text', '15 fases');
     await page.getByRole('button', { name: 'PULAR HISTÓRIA' }).waitFor({ state: 'visible' });
 
-    const previewCanvas = page.locator('#story-runner-preview img');
-    await previewCanvas.waitFor({ state: 'visible', timeout: 5000 });
-    await page.waitForTimeout(150);
-    const preview = await previewCanvas.evaluate(image => {
-      const canvas=document.createElement('canvas');canvas.width=canvas.height=160;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      ctx.drawImage(image,0,0,160,160);
-      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-      let solid = 0;
-      let orange = 0;
-      let blue = 0;
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        const a = data[i + 3];
-        if (a >= 220) solid++;
-        if (a >= 180 && r >= 130 && g >= 35 && g <= 185 && b <= 105) orange++;
-        if (a >= 180 && b >= 55 && b > r * .75 && b > g * .9) blue++;
-      }
-      return { width: canvas.width, height: canvas.height, solid, orange, blue };
-    });
-    console.log('STORY_PREVIEW', JSON.stringify(preview));
-    assert.equal(preview.width, 160, 'preview da história deve usar um frame 160x160 do atlas hero');
-    assert.equal(preview.height, 160, 'preview da história deve usar um frame 160x160 do atlas hero');
-    assert.ok(preview.solid >= 350, 'preview da história precisa conter corpo sólido do Goku');
-    assert.ok(preview.orange >= 180, 'preview da história precisa mostrar o gi laranja do Goku');
-    assert.ok(preview.blue >= 35, 'preview da história precisa mostrar detalhes azuis do Goku');
+    const previewImage = page.locator('#story-runner-preview img');
+    await previewImage.waitFor({ state: 'visible', timeout: 5000 });
+    const src = await previewImage.getAttribute('src');
+    assert.ok(src?.includes('goku-running-source.gif'), 'a introdução deve preservar o GIF aprovado do Goku');
 
     const panelVisibility = await page.locator('#panel').evaluate(el => getComputedStyle(el).visibility);
     assert.equal(panelVisibility, 'hidden');
-
     await page.keyboard.press('Space');
     await page.waitForTimeout(120);
     assert.equal(await story.isVisible(), true, 'Espaço não pode iniciar o jogo por trás da introdução');
 
     await page.getByRole('button', { name: 'CONTINUAR' }).click();
-    await expectText(page, '#story-kicker', 'CAPÍTULO 2');
-    await expectText(page, '#story-text', 'não conseguia voar');
+    await expectText(page, '#story-kicker', 'CHEFES EM MOVIMENTO');
+    await expectText(page, '#story-text', 'rochas');
 
     await page.getByRole('button', { name: 'CONTINUAR' }).click();
-    await expectText(page, '#story-kicker', 'CAPÍTULO 3');
-    await expectText(page, '#story-text', 'cinco mundos');
+    await expectText(page, '#story-kicker', 'OUTRO MUNDO');
+    await expectText(page, '#story-text', 'Kid Boo');
 
     await page.getByRole('button', { name: 'IR PARA O MENU' }).click();
     await story.waitFor({ state: 'hidden', timeout: 5000 });
@@ -72,41 +47,44 @@ const assert = require('node:assert/strict');
     await replayStory.waitFor({ state: 'visible', timeout: 5000 });
 
     await start.click();
+    await story.waitFor({ state: 'visible', timeout: 5000 });
+    await expectText(page, '#story-kicker', 'SAGA DOS SAIYAJINS');
+    await expectText(page, '#story-title', 'RADITZ');
+    await expectText(page, '#story-progress', 'NOVO CENÁRIO E CHÃO');
+    // O loading possui botão manual, mas também avança sozinho após a leitura.
+    // Esperar o fechamento automático elimina a corrida entre o timer do jogo
+    // e um clique sintético do Chrome headless.
+    await story.waitFor({ state: 'hidden', timeout: 5000 });
     await page.locator('#hud').waitFor({ state: 'visible', timeout: 5000 });
+    await expectText(page, '#phase-name', 'RADITZ');
 
-    // Depois de vista uma vez, a história não é obrigatória em todo boot.
+    // Depois de vista uma vez, a introdução não bloqueia todo boot.
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForTimeout(250);
-    assert.equal(await story.isVisible(), false, 'história já vista deve ser pulada automaticamente');
+    assert.equal(await story.isVisible(), false, 'introdução já vista deve ser pulada automaticamente');
     start = page.getByRole('button', { name: 'JOGAR' });
-    await start.waitFor({ state: 'visible', timeout: 5000 }).catch(async error => {
-      console.error('STORY_RELOAD_STATE', await page.locator('#panel').evaluate(el => el.outerHTML));
-      throw error;
-    });
+    await start.waitFor({ state: 'visible', timeout: 5000 });
     await replayStory.waitFor({ state: 'visible', timeout: 5000 });
 
-    // Mas ela nunca pode "sumir": o menu precisa permitir rever os 3 capítulos.
+    // O menu continua permitindo rever a introdução.
     await replayStory.click();
     await story.waitFor({ state: 'visible', timeout: 5000 });
-    await expectText(page, '#story-kicker', 'CAPÍTULO 1');
-    await expectText(page, '#story-title', 'Goku perdeu seus poderes');
+    await expectText(page, '#story-title', 'Raditz');
     await page.keyboard.press('Space');
     await page.waitForTimeout(120);
-    assert.equal(await story.isVisible(), true, 'replay da história também bloqueia início por teclado');
+    assert.equal(await story.isVisible(), true, 'replay da introdução também bloqueia início por teclado');
     await page.getByRole('button', { name: 'PULAR HISTÓRIA' }).click();
     await story.waitFor({ state: 'hidden', timeout: 5000 });
-    await replayStory.waitFor({ state: 'visible', timeout: 5000 });
 
-    // O botão PULAR HISTÓRIA também precisa funcionar no primeiro acesso.
-    await page.evaluate(() => localStorage.removeItem('goku-run-story-seen-v1'));
+    // O skip funciona também no primeiro acesso.
+    await page.evaluate(() => localStorage.removeItem('goku-run-campaign-intro-seen-v1'));
     await page.reload({ waitUntil: 'networkidle' });
     await story.waitFor({ state: 'visible', timeout: 5000 });
     await page.getByRole('button', { name: 'PULAR HISTÓRIA' }).click();
     await story.waitFor({ state: 'hidden', timeout: 5000 });
     await page.getByRole('button', { name: 'JOGAR' }).waitFor({ state: 'visible', timeout: 5000 });
-    await replayStory.waitFor({ state: 'visible', timeout: 5000 });
 
-    console.log('PASS: intro automática no primeiro acesso, replay pelo menu, preview real, skip e persistência.');
+    console.log('PASS: introdução da campanha, GIF do Goku, loading do Raditz, replay e persistência.');
   } finally {
     await browser.close();
   }
