@@ -2,6 +2,7 @@
   "name": "goku-run-cinco-mundos",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "npm@11.21.1",
   "scripts": {
     "dev": "ng serve --host 0.0.0.0 --port 5173",
     "build": "ng build",
