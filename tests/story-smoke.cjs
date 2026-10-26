@@ -51,7 +51,9 @@ const assert = require('node:assert/strict');
     await expectText(page, '#story-kicker', 'SAGA DOS SAIYAJINS');
     await expectText(page, '#story-title', 'RADITZ');
     await expectText(page, '#story-progress', 'NOVO CENÁRIO E CHÃO');
-    await page.getByRole('button', { name: 'INICIAR FASE' }).click();
+    // O loading possui botão manual, mas também avança sozinho após a leitura.
+    // Esperar o fechamento automático elimina a corrida entre o timer do jogo
+    // e um clique sintético do Chrome headless.
     await story.waitFor({ state: 'hidden', timeout: 5000 });
     await page.locator('#hud').waitFor({ state: 'visible', timeout: 5000 });
     await expectText(page, '#phase-name', 'RADITZ');
