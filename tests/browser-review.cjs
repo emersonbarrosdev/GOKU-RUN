@@ -17,6 +17,15 @@ const path = require('node:path');
     const report=await page.evaluate(async()=>{
       const {game:g,scene}=window.__gokuRun,frameTimes=[],drawTimes=[],wrapTimes=[],stages=new Set(),hidden=[];
       const originalUpdate=g.update,originalDraw=scene.renderWorld;
+      const damageEvents=[],originalDamage=g.player.damage;
+      g.player.damage=function(friend){
+        const before=this.lives,result=originalDamage.call(this,friend);
+        if(this.lives<before)damageEvents.push({time:g.time,phase:g.phaseIndex,friend:!!friend,foot:this.foot,vy:this.vy,
+          grounded:this.grounded,jumps:this.jumps,box:this.box,
+          enemies:g.enemies.filter(e=>e.active&&Math.abs(e.x-this.x)<180).map(e=>({type:e.type,x:e.x,box:e.box})),
+          friends:g.friends.filter(f=>f.active&&Math.abs(f.x-this.x)<180).map(f=>({x:f.x,box:f.box}))});
+        return result;
+      };
       let previous=performance.now(),distance=0,phase=-1;
       g.update=function(dt){
         if(this.state==='playing'){
@@ -25,8 +34,12 @@ const path = require('node:path');
             ...this.friends.filter(f=>f.active&&!f.touched)];
           const nearby=dangers.some(e=>e.x-p.x>-35&&e.x-p.x<(e.type==='blast'?175:150));
           const next=dangers.some(e=>e.type!=='blast'&&e.x-p.x>-35&&e.x-p.x<230);
+          // Native single jump rises about 105px. Piccolo's collision top is
+          // 114px above ground, so use the existing double jump before contact,
+          // not only after descending (the legacy pilot waited too long).
+          const tall=dangers.some(e=>e.box.y<560-105&&e.x-p.x>-35&&e.x-p.x<230);
           if(p.grounded&&(nearby||!this.track.supports(p.x+55,p.x+65)))p.queueJump();
-          else if(!p.grounded&&p.jumps>0&&p.vy>200&&next)p.queueJump();
+          else if(!p.grounded&&p.jumps>0&&((p.airTime>.12&&tall)||(p.vy>200&&next)))p.queueJump();
         }
         originalUpdate.call(this,dt);
       };
@@ -54,7 +67,7 @@ const path = require('node:path');
         frameTimes:stats(frameTimes.slice(5)),drawTimes:stats(drawTimes),tileWraps:stats(wrapTimes),
         hiddenFrames:hidden.filter(Boolean).length,musicAdvanced,
         sfxReady:Object.keys(window.__gokuRun.core.SFX).every(key=>scene.cache.audio.exists('sfx-'+key)),
-        renderer:scene.game.renderer.type};
+        renderer:scene.game.renderer.type,damageEvents};
     });
     console.log(JSON.stringify(report,null,2));
     assert.equal(report.state,'victory');assert.equal(report.stages.length,5);

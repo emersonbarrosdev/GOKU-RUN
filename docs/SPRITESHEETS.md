@@ -1,35 +1,21 @@
-# Arte da versão Phaser
+# Arte ativa na Task 1
+
+O player usa o GIF escolhido pelo usuário, convertido em uma única folha transparente sem alterar os pixels das poses.
 
 | Arquivo | Uso |
 | --- | --- |
-| [goku_run_v11.png](../assets/spritesheets/goku_run_v11.png) | 8 quadros biomecânicos: contato, apoio, passagem e voo para cada perna |
-| [goku_stride_v8.png](../assets/spritesheets/goku_stride_v8.png) | 4 quadros de salto usados pelo runtime |
-| [enemies_fullbody_v7.png](../assets/spritesheets/enemies_fullbody_v7.png) | Corrida para esquerda, voo, carga e disparo |
-| [friends_motion_v4.png](../assets/spritesheets/friends_motion_v4.png) | 4 gestos por aliado |
-| [terrain_ground_v4.png](../assets/spritesheets/terrain_ground_v4.png) | Fonte visual do chão, pré-colorida por fase no carregamento |
-| [ground_enemy_sheet.png](../assets/spritesheets/ground_enemy_sheet.png) | Cristal e rocha |
-| [menu_clean_v4.png](../assets/ui/menu_clean_v4.png) | Menu com botões HTML independentes |
+| [goku-run.png](../assets/game/player/goku-run.png) | 10 frames, grid 5 × 2, células 256 × 256 |
+| [goku-running-source.gif](../assets/game/player/goku-running-source.gif) | Referência preservada e preview da introdução |
+| [enemies_fullbody_v7.png](../assets/spritesheets/enemies_fullbody_v7.png) | Inimigos existentes |
+| [friends_motion_v4.png](../assets/spritesheets/friends_motion_v4.png) | Aliados existentes |
+| [ground_enemy_sheet.png](../assets/spritesheets/ground_enemy_sheet.png) | Cristal e rocha existentes |
 
-Panoramas separados:
+[NativePlayer](../js/native-player.mjs) usa spritesheet, animação Phaser e corpo Arcade. Escala 0,65; origem (0,5; 240/256); ciclo base de 680 ms com tempos relativos originais. Não existe atlas manual de baixa resolução para o novo player. Pulos usam poses aéreas 3 e 8.
 
-- [Namek](../assets/backgrounds/namek_panorama_v7.png): 2048 × 768.
-- [Floresta](../assets/backgrounds/forest_panorama_v7.png): 2170 × 725.
-- [Cânion](../assets/backgrounds/canyon_panorama_v7.png): 2172 × 724.
-- [Cidade](../assets/backgrounds/city_panorama_v7.png): 2172 × 724.
-- [Vulcão](../assets/backgrounds/lava_panorama_v7.png): 2048 × 768.
+`npm run art:import-gif` reproduz a conversão com FFmpeg. `npm run test:visual` compara todos os pixels visíveis com o GIF. [Contrato e procedência](../assets/game/player/README.md).
 
-Os recortes e pivôs finais ficam em [goku-visual-config.js](../js/goku-visual-config.js). A corrida usa uma única escala `108/321`; poses recolhidas não são ampliadas para preencher a célula.
+## Chão e etapas posteriores
 
-[main.js](../js/main.js) prepara células de 160 × 160 com quadros completos. A corrida acompanha a distância do mundo, o salto seleciona quatro poses pela física e toda preparação de textura ocorre uma vez no carregamento.
+O chão atual é **neutro e temporário**, com corpos estáticos por plataforma. Não é a entrega do chão definitivo. O tileset experimental v5 e a folha procedural v12 foram rejeitados e não são carregados pela gameplay atual.
 
-## Tileset do chão
-
-O runtime usa três peças explícitas por fase:
-
-1. canto esquerdo de 40 × 164 px;
-2. meio repetível de 840 × 164 px;
-3. canto direito de 40 × 164 px.
-
-O meio é construído por espelhamento e tem pixels idênticos nas duas emendas. O deslocamento usa `Math.floor(distance)` e os cantos também recebem coordenadas inteiras. A máscara geométrica das plataformas é independente da imagem: ela abre os buracos físicos, enquanto os cantos apenas desenham o acabamento. Assim, a altura da arte não interfere na colisão.
-
-Folhas antigas e o atlas de baixa resolução não são carregados pelo jogo.
+A reestruturação (Task 2) e o chão definitivo (Task 3) aguardam aprovação explícita do player. [Estado da Task 1](TASK1-PLAYER-STATUS.md).

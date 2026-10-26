@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import '../css/story.css';
+import { PLAYER_ART } from './native-player.mjs';
 
 const C = window.GokuCore;
 const params = new URLSearchParams(location.search);
@@ -93,50 +94,13 @@ function waitForScene() {
 
 function animateSheetPreview(node) {
   if (!node || !C) return () => {};
-
-  let frame = 0;
-  let timer = null;
-  let stopped = false;
-  const canvas = document.createElement('canvas');
-  canvas.width = 160;
-  canvas.height = 160;
-  canvas.setAttribute('aria-hidden', 'true');
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  node.replaceChildren(canvas);
-
+  // Menu preview uses the original GIF; gameplay uses the native Phaser sheet.
+  // No second game instance and no Canvas/setInterval character renderer.
   const image = new Image();
-  image.onload = () => {
-    if (stopped) return;
-
-    const renderFrame = () => {
-      if (stopped) return;
-      const bounds = C.RUN_FRAMES[frame];
-      const pivot = C.RUN_PIVOTS[frame];
-      const scale = C.PLAYER_SCALE.run;
-      ctx.clearRect(0, 0, 160, 160);
-      ctx.drawImage(
-        image,
-        bounds[0], bounds[1], bounds[2], bounds[3],
-        80 + (bounds[0] - pivot[0]) * scale,
-        140 + (bounds[1] - pivot[1]) * scale,
-        bounds[2] * scale,
-        bounds[3] * scale,
-      );
-      frame = (frame + 1) % 8;
-    };
-
-    renderFrame();
-    const previewFrameRate = 335 / C.RUN_STRIDE * 8;
-    timer = setInterval(renderFrame, 1000 / previewFrameRate);
-  };
-  image.onerror = () => console.error('Falha ao carregar atlas do Goku para a história:', C.PATHS.run);
-  image.src = C.PATHS.run;
-
-  return () => {
-    stopped = true;
-    if (timer) clearInterval(timer);
-    node.replaceChildren();
-  };
+  image.alt = 'Goku correndo';image.width=160;image.height=160;image.style.objectFit='contain';
+  image.src = './assets/game/player/goku-running-source.gif';
+  node.replaceChildren(image);
+  return () => node.replaceChildren();
 }
 
 function restoreMenu(panel) {
@@ -226,7 +190,7 @@ function buildParty(scene) {
   const headline = scene.add.text(640, 72, 'SURPRESA, GOKU!', {fontFamily:'Arial Black, Arial',fontSize:'48px',fontStyle:'bold',color:'#fff4ba',stroke:'#4b2030',strokeThickness:8}).setOrigin(.5);
   const sub = scene.add.text(640, 123, 'A energia misteriosa sempre esteve vindo dos seus amigos.', {fontFamily:'Arial',fontSize:'20px',color:'#ffffff',stroke:'#241429',strokeThickness:4}).setOrigin(.5);
   party.add([headline, sub]);
-  const hero = scene.add.sprite(245, 557, 'hero', 11).setOrigin(.5, 140/160).setScale(1.28);
+  const hero = scene.add.sprite(245, 557, PLAYER_ART.key, 0).setOrigin(.5, PLAYER_ART.baseline/256).setScale(PLAYER_ART.scale);
   party.add(hero);
   const friendData = [{frame:0,x:760,label:'VEGETA',scale:1.23},{frame:4,x:935,label:'PICCOLO',scale:1.12},{frame:8,x:1085,label:'KURIRIN',scale:1.35}];
   for (const item of friendData) {
@@ -254,8 +218,8 @@ async function beginEnding(scene) {
   const bg = scene.add.image(0, 0, 'world4').setOrigin(0).setDisplaySize(1280, 720);
   const tint = scene.add.rectangle(640, 360, 1280, 720, 0x16090d, .18);
   const caption = scene.add.text(640, 110, 'A energia estava logo à frente…', {fontFamily:'Arial Black, Arial',fontSize:'28px',color:'#ffffff',stroke:'#1a0d11',strokeThickness:5}).setOrigin(.5);
-  const runner = scene.add.sprite(170, 560, 'hero', 0).setOrigin(.5, 140/160).setScale(1.1);
-  runner.play('run', true);runner.anims.timeScale = 1.15;runScene.add([bg, tint, caption, runner]);
+  const runner = scene.add.sprite(170, 560, PLAYER_ART.key, 0).setOrigin(.5, PLAYER_ART.baseline/256).setScale(PLAYER_ART.scale);
+  runner.play(PLAYER_ART.animation, true);runner.anims.timeScale = PLAYER_ART.playbackRate * 1.15;runScene.add([bg, tint, caption, runner]);
   await new Promise(resolve => scene.tweens.add({targets:runner,x:1390,duration:2100,ease:'Sine.easeIn',onComplete:resolve}));
   runScene.destroy(true);
   overlay.hidden = false;overlay.dataset.mode = 'loading';loading.hidden = false;dialogue.hidden = true;await sleep(1250);

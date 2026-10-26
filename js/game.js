@@ -1,9 +1,9 @@
 (() => {
   "use strict";
-  // One complete eight-pose cycle per 255 world pixels. Because the animation
-  // clock advances from travelled distance, feet and terrain stay locked while
-  // the five phase speeds naturally produce 10.5-13.5 visual FPS.
-  const RUN_STRIDE = 255;
+  // Legacy model clock mirrors the reference at half speed: 680ms per cycle.
+  // Gameplay animation itself is owned by Phaser (native-player.mjs).
+  const RUN_STRIDE = 335 * .68;
+  const GROUND_TILE_WIDTH = 840;
 
   const W = 1280, H = 720, GROUND = 560;
   const PHASE_SECONDS = 30, PLAYER_HEIGHT = 108;
@@ -202,11 +202,12 @@
       this.buffer = 0; this.runTime = 0; this.airTime = 0; this.landTime = 0;
       this.lives = 3; this.invulnerable = 0; this.hurtTime = 0;
       this.charge = 0; this.reserve = 0; this.kiTime = 0;
+      this.motionDriver?.reset();
     }
     get kiActive() { return this.kiTime > 0; }
     get kiReady() { return !this.kiActive && this.charge >= 100; }
     get height() { return PLAYER_HEIGHT; }
-    get box() { return { x: this.x - 25, y: this.foot - 97, w: 50, h: 90 }; }
+    get box() { return this.motionDriver?.box || { x: this.x - 25, y: this.foot - 97, w: 50, h: 90 }; }
     queueJump() { this.buffer = .13; }
     activateKi() {
       if (!this.kiReady) return false;
@@ -243,6 +244,7 @@
         this.kiTime = Math.max(0, this.kiTime - dt);
         if (!this.kiActive) this.endKi();
       }
+      if (this.motionDriver) return this.motionDriver.update(dt, track, speed);
       const supported = track.supports(this.x - 15, this.x + 15);
       if (this.grounded && !supported) this.grounded = false;
       this.coyote = this.grounded ? .09 : Math.max(0, this.coyote - dt);
@@ -256,10 +258,10 @@
       }
       this.buffer = Math.max(0, this.buffer - dt);
       if (this.grounded) {
-        const previous = Math.floor(this.runTime);
-        this.runTime = (this.runTime + dt * speed / RUN_STRIDE * 8) % 8;
-        stepped = previous !== Math.floor(this.runTime) &&
-          (Math.floor(this.runTime) === 0 || Math.floor(this.runTime) === 4);
+        const count=RUN_FRAMES.length,half=count/2;
+        const next=this.runTime+dt*speed/RUN_STRIDE*count;
+        stepped=Math.floor(next/half)!==Math.floor(this.runTime/half);
+        this.runTime=next%count;
       } else {
         this.airTime += dt;
         const before = this.foot;
@@ -274,7 +276,7 @@
       return { jumped, landed, stepped, impact };
     }
     get frame() {
-      if (this.grounded) return this.landTime > 0 ? 3 : Math.floor(this.runTime) % 8;
+      if (this.grounded) return this.landTime > 0 ? 3 : Math.floor(this.runTime) % RUN_FRAMES.length;
       if (this.airTime < .08) return 0;
       return this.vy < 70 ? 1 : 2;
     }
@@ -360,8 +362,6 @@
     draw(ctx, assets, phase) {
       const texture = assets.groundTiles[PHASES.indexOf(phase)];
       if (!texture) return;
-      // One continuous clipped ground, anchored in world coordinates. No end-cap
-      // sprites, no floating rock undersides, no stretched final tile.
       ctx.save();
       ctx.beginPath();
       for (const segment of this.segments) {
@@ -373,9 +373,9 @@
       this.drawPitWalls(ctx, phase);
     }
     visibleTiles() {
-      const first=Math.floor(this.distance/840);
-      const last=Math.floor((this.distance+W)/840);
-      return Array.from({length:last-first+1},(_,i)=>({index:first+i,x:(first+i)*840-this.distance}));
+      const first=Math.floor(this.distance/GROUND_TILE_WIDTH);
+      const last=Math.floor((this.distance+W)/GROUND_TILE_WIDTH);
+      return Array.from({length:last-first+1},(_,i)=>({index:first+i,x:(first+i)*GROUND_TILE_WIDTH-this.distance}));
     }
     drawPitWalls(ctx, phase) {
       const index=PHASES.indexOf(phase);
@@ -949,7 +949,7 @@
 
   const core = { Player, Track, Enemy, Friend, Game, Assets, PHASES, PATHS,
     JUMP_FRAMES, RUN_FRAMES, PLAYER_SCALE, FRIEND_FRAMES, overlap, GROUND, PLAYER_HEIGHT, KI_PER_ORB,
-    RUN_STRIDE, panoramaWindow, PANELS, RUN_PIVOTS, JUMP_PIVOTS, SOLDIER_FRAMES, FLIGHT_FRAMES,
+    RUN_STRIDE, GROUND_TILE_WIDTH, panoramaWindow, PANELS, RUN_PIVOTS, JUMP_PIVOTS, SOLDIER_FRAMES, FLIGHT_FRAMES,
     SOLDIER_PIVOTS, FLIGHT_PIVOTS, AudioManager, SFX };
   if (typeof module !== "undefined" && module.exports) module.exports = core;
   if (typeof document === "undefined") return;

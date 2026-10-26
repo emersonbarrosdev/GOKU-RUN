@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { Player, Track, Enemy, Friend, Game, Assets, PHASES, JUMP_FRAMES, RUN_FRAMES,
   overlap, GROUND, PLAYER_HEIGHT, PATHS, FRIEND_FRAMES, panoramaWindow,
-  RUN_PIVOTS, JUMP_PIVOTS, SOLDIER_FRAMES, FLIGHT_FRAMES, RUN_STRIDE,
+  RUN_PIVOTS, JUMP_PIVOTS, SOLDIER_FRAMES, FLIGHT_FRAMES, RUN_STRIDE, GROUND_TILE_WIDTH,
   PLAYER_SCALE } = require('../js/game.js');
 
 function makeGame() {
@@ -130,12 +130,12 @@ test('air encounters are deferred near pits and do not overlap existing ground e
 test('run and jump retain anatomical scale; tucked poses are never enlarged to fill a box', () => {
   const p = new Player(), seen = [], assets = { frame(...args) { seen.push(args); } };
   const ctx = {};
-  for (let i = 0; i < 8; i++) { p.runTime = i; p.draw(ctx, assets, 0); }
+  for (let i = 0; i < RUN_FRAMES.length; i++) { p.runTime = i; p.draw(ctx, assets, 0); }
   p.grounded = false; p.airTime = 0; p.draw(ctx, assets, 0);
   p.airTime = .2; p.vy = -100; p.draw(ctx, assets, 0);
   p.vy = 100; p.draw(ctx, assets, 0);
   p.grounded = true; p.landTime = .05; p.draw(ctx, assets, 0);
-  assert.equal(new Set(seen.map(args => args[1] + ':' + (args[1] === 'run' ? RUN_FRAMES : JUMP_FRAMES).indexOf(args[2]))).size, 12);
+  assert.equal(new Set(seen.map(args => args[1] + ':' + (args[1] === 'run' ? RUN_FRAMES : JUMP_FRAMES).indexOf(args[2]))).size, RUN_FRAMES.length+4);
   const runScales=seen.filter(args=>args[1]==='run').map(args=>args[6]);
   const jumpScales=seen.filter(args=>args[1]==='jump').map(args=>args[6]);
   assert.ok(runScales.every(scale=>scale===PLAYER_SCALE.run),'all run poses use one anatomical scale');
@@ -187,20 +187,20 @@ test('jump has a shorter falling phase and reports a finite landing impulse', ()
   assert.ok(impact>.7 && impact<=1);
 });
 
-test('run cycle advances all eight poses and cadence follows distance, not display FPS', () => {
+test('run cycle advances all poses and cadence follows distance, not display FPS', () => {
   for(const speed of [335,430]) {
-    const theoreticalFps=speed/RUN_STRIDE*8;
-    assert.ok(theoreticalFps>=10&&theoreticalFps<=14,
-      `cadence at ${speed}px/s must stay between 10 and 14 FPS; got ${theoreticalFps}`);
+    const theoreticalFps=speed/RUN_STRIDE*RUN_FRAMES.length;
+    assert.ok(theoreticalFps>=14&&theoreticalFps<=19,
+      `10-pose reference cycle at ${speed}px/s must preserve its cadence; got ${theoreticalFps}`);
 
     const samples=[];
     for(const updateRate of [30,60,120]) {
       const p=new Player(),track=new Track(),frames=new Set();
       for(let i=0;i<updateRate*2;i++){p.update(1/updateRate,track,speed);frames.add(p.frame);}
-      assert.equal(frames.size,8);
+      assert.equal(frames.size,RUN_FRAMES.length);
       samples.push(p.runTime);
     }
-    const expected=(speed*2/RUN_STRIDE*8)%8;
+    const expected=(speed*2/RUN_STRIDE*RUN_FRAMES.length)%RUN_FRAMES.length;
     assert.ok(samples.every(runTime=>Math.abs(runTime-expected)<.000001));
     assert.ok(Math.max(...samples)-Math.min(...samples)<.000001,
       '30/60/120 Hz updates must produce the same distance-driven animation phase');
@@ -236,8 +236,8 @@ test('ground tiles cover the complete viewport on both sides of every wrap', () 
   const track=new Track();
   for(const distance of [0, .1, 839.99,840,840.01,1679.99,1680,50000.1]) {
     track.distance=distance;const tiles=track.visibleTiles();
-    assert.ok(tiles[0].x<=0);assert.ok(tiles.at(-1).x+840>=1280);
-    for(let i=1;i<tiles.length;i++)assert.ok(Math.abs(tiles[i].x-tiles[i-1].x-840)<1e-8);
+    assert.ok(tiles[0].x<=0);assert.ok(tiles.at(-1).x+GROUND_TILE_WIDTH>=1280);
+    for(let i=1;i<tiles.length;i++)assert.ok(Math.abs(tiles[i].x-tiles[i-1].x-GROUND_TILE_WIDTH)<1e-8);
   }
 });
 

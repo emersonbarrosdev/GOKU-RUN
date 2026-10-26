@@ -7,24 +7,26 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --require ./js/goku-visual-config.cjs --test tests/game.test.cjs tests/runtime-step.test.cjs && node --require ./js/goku-visual-config.cjs tests/playthrough.cjs",
+    "art:import-gif": "node tools/import-run-gif.cjs",
     "test:browser": "node tests/browser-review.cjs",
     "test:mobile": "node tests/mobile-smoke.cjs",
-    "test:visual": "node tests/visual-audit.cjs",
+    "test:visual": "node tests/gif-fidelity.cjs",
     "test:story": "node tests/story-smoke.cjs",
-    "test:render": "node tests/render-contract.cjs && node tests/run-animation-audit.cjs",
+    "test:render": "node tests/native-player.cjs && node tests/gif-fidelity.cjs",
+    "test:player-native": "node tests/native-player.cjs",
     "android:sync": "npm run build && cap sync android",
     "android:open": "cap open android",
     "android:apk": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-android.ps1"
   },
   "dependencies": {
-    "phaser": "3.90.0",
-    "@capacitor/core": "8.5.3",
     "@capacitor/android": "8.5.3",
-    "@capacitor/app": "8.0.1"
+    "@capacitor/app": "8.0.1",
+    "@capacitor/core": "8.5.3",
+    "phaser": "4.2.1"
   },
   "devDependencies": {
     "@capacitor/cli": "8.5.3",
-    "vite": "8.3.5",
-    "playwright-core": "1.58.2"
+    "playwright-core": "1.58.2",
+    "vite": "8.3.5"
   }
 }

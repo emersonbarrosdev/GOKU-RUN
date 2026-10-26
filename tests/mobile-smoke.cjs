@@ -40,7 +40,7 @@ const path=require('node:path');
     await page.getByRole('button',{name:'CONTINUAR'}).tap();
     if(process.env.QA_OUTPUT_DIR)await page.screenshot({path:path.join(process.env.QA_OUTPUT_DIR,'mobile-landscape.png')});
 
-    // A corrida fica entre 10 e 14 FPS e continua ligada à distância do mundo.
+    // All ten original GIF poses are driven by Phaser on mobile.
     // O smoke observa dois segundos para cobrir o ciclo inteiro mesmo sob carga.
     const frames=await page.evaluate(async()=>{
       const frames=new Set();
@@ -48,8 +48,8 @@ const path=require('node:path');
       return [...frames].sort((a,b)=>a-b);
     });
     console.log('MOBILE_RUN_FRAMES',JSON.stringify(frames));
-    assert.ok(frames.length>=7,'mobile precisa avançar por praticamente todo o ciclo de corrida');
-    assert.ok(frames.every(frame=>frame>=0&&frame<=7),'mobile deve usar somente frames de corrida enquanto grounded');
+    assert.equal(frames.length,10,'mobile deve mostrar os 10 quadros originais');
+    assert.ok(frames.every(frame=>frame>=0&&frame<10),'mobile deve usar somente frames de corrida enquanto grounded');
 
     await page.getByRole('button',{name:'Pausar',exact:true}).tap();
     await page.waitForTimeout(100);

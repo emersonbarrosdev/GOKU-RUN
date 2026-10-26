@@ -3,6 +3,9 @@ import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';
 import './game.js';
 import '../css/mobile.css';
+import { PLAYER_ART, loadNativePlayer, NativePlayer } from './native-player.mjs';
+
+const useNativePlayer = PLAYER_ART.releaseReady;
 
 const C=window.GokuCore,{Game,Player,Track,Assets,PATHS,SFX,GROUND}=C;
 const $=id=>document.getElementById(id);
@@ -19,11 +22,15 @@ class RunnerScene extends Phaser.Scene {
   constructor(){
     super('runner');
     this.accumulator=0;this.views=new Map();this.lastState='';
-    this.aliveViews=new Set();this.maskSegments=[];this.particleColors=new Map();
+    this.aliveViews=new Set();this.particleColors=new Map();
     this.backgroundWidths=C.PANELS.map(([,,w,h])=>w*720/h);
   }
   preload(){
-    for(const [key,url] of Object.entries(PATHS))this.load.image(key,url);
+    for(const [key,url] of Object.entries(PATHS)) {
+      if (useNativePlayer && ['run','jump','terrain'].includes(key)) continue;
+      this.load.image(key,url);
+    }
+    if (useNativePlayer) loadNativePlayer(this);
     for(const [key,file] of Object.entries(SFX))this.load.audio('sfx-'+key,'./assets/sfx/'+file+'.wav');
     this.load.audio('music',['./assets/sounds/trilha.ogg','./assets/sounds/trilha.mp3']);
     this.load.on('progress',p=>{ui.subtitle.textContent='Carregando… '+Math.round(p*100)+'%';});
@@ -31,8 +38,8 @@ class RunnerScene extends Phaser.Scene {
   }
   create(){
     this.art=new Assets();
-    this.art.images=Object.fromEntries(Object.keys(PATHS).map(k=>[k,this.textures.get(k).getSourceImage()]));
-    this.art.prepareSpriteCutouts();this.art.prepareGround();this.makeTextures();
+    this.art.images=Object.fromEntries(Object.keys(PATHS).filter(k=>this.textures.exists(k)).map(k=>[k,this.textures.get(k).getSourceImage()]));
+    this.art.prepareSpriteCutouts();if(!useNativePlayer)this.art.prepareGround();this.makeTextures();
     this.model=Object.create(Game.prototype);const g=this.model;
     g.player=new Player();g.track=new Track();g.best=0;
     try{g.best=Number(localStorage.getItem('goku-run-v5-best'))||0;}catch{}
@@ -44,19 +51,15 @@ class RunnerScene extends Phaser.Scene {
     this.world=this.add.container(0,0);
     this.background=this.add.image(0,0,'world0').setOrigin(0);this.previous=this.add.image(0,0,'world0').setOrigin(0);
     this.world.add([this.background,this.previous]);
-    // Uma única máscara geométrica acompanha o mundo. O deslocamento é
-    // pixel-alinhado para evitar shimmer/flicker no limite da textura.
-    this.floorMask=this.make.graphics({x:0,y:0,add:false});
-    const groundMask=this.floorMask.createGeometryMask();
-    this.terrain=this.add.tileSprite(0,GROUND-3,1280,164,'terrain-0').setOrigin(0).setMask(groundMask);
-    this.world.add(this.terrain);
-    // Pool fixo para os cantos do tileset. As imagens são reposicionadas em
-    // coordenadas inteiras; nenhuma textura é criada durante o gameplay.
-    this.groundEdgeViews=Array.from({length:16},()=>this.add.image(0,GROUND-3,'terrain-cap-left-0')
-      .setOrigin(0).setVisible(false));
-    this.world.add(this.groundEdgeViews);
+    this.groundLayer=this.add.container(0,0);this.world.add(this.groundLayer);
     this.effects=this.add.graphics();this.world.add(this.effects);
-    this.hero=this.add.sprite(235,GROUND,'hero',0).setOrigin(.5,140/160);this.world.add(this.hero);
+    if(useNativePlayer){
+      this.nativePlayer=new NativePlayer(this,g.player,GROUND);
+      g.player.motionDriver=this.nativePlayer;
+      this.hero=this.nativePlayer.sprite;
+    }else{
+      this.hero=this.add.sprite(235,GROUND,'hero',0).setOrigin(.5,140/160);this.world.add(this.hero);
+    }
     this.foreground=this.add.graphics();this.world.add(this.foreground);
     this.labels=Array.from({length:10},()=>this.add.text(0,0,'',{fontFamily:'Arial',fontSize:'14px',fontStyle:'bold',stroke:'#142434',strokeThickness:3}).setOrigin(.5).setVisible(false));
     this.world.add(this.labels);
@@ -78,30 +81,30 @@ class RunnerScene extends Phaser.Scene {
   isPortrait(){return matchMedia('(orientation:portrait) and (pointer:coarse)').matches;}
   makeTextures(){
     const atlas=(key,frames)=>{
-      const surface=document.createElement('canvas');surface.width=160*frames.length;surface.height=160;
+      const columns=Math.min(8,frames.length);
+      const surface=document.createElement('canvas');surface.width=160*columns;surface.height=160*Math.ceil(frames.length/columns);
       const ctx=surface.getContext('2d');
-      frames.forEach((f,i)=>this.art.frame(ctx,f.key,f.bounds,f.pivot,i*160+80,140,f.scale));
+      frames.forEach((f,i)=>this.art.frame(ctx,f.key,f.bounds,f.pivot,(i%columns)*160+80,Math.floor(i/columns)*160+140,f.scale));
       const texture=this.textures.addCanvas(key,surface);
-      frames.forEach((_,i)=>texture.add(i,0,i*160,0,160,160));
+      frames.forEach((_,i)=>texture.add(i,0,(i%columns)*160,Math.floor(i/columns)*160,160,160));
     };
-    atlas('hero',[...C.RUN_FRAMES.map((bounds,i)=>({key:'run',bounds,pivot:C.RUN_PIVOTS[i],scale:C.PLAYER_SCALE.run})),
+    if(!useNativePlayer)atlas('hero',[...C.RUN_FRAMES.map((bounds,i)=>({key:'run',bounds,pivot:C.RUN_PIVOTS[i],scale:C.PLAYER_SCALE.run})),
       ...C.JUMP_FRAMES.map((bounds,i)=>({key:'jump',bounds,pivot:C.JUMP_PIVOTS[i],scale:C.PLAYER_SCALE.jump}))]);
     atlas('soldier',C.SOLDIER_FRAMES.map((bounds,i)=>({key:'enemies',bounds,pivot:C.SOLDIER_PIVOTS[i],scale:.23})));
     atlas('flyer',C.FLIGHT_FRAMES.map((bounds,i)=>({key:'enemies',bounds,pivot:C.FLIGHT_PIVOTS[i],scale:.23})));
     const allies=document.createElement('canvas');allies.width=12*160;allies.height=160;const ac=allies.getContext('2d');
     C.FRIEND_FRAMES.forEach((bounds,i)=>{const variant=Math.floor(i/4),h=bounds[3]/[393,474,306][variant]*[101,122,72][variant];this.art.sprite(ac,'friends',bounds,i*160+80,140,h);});
     const allyTexture=this.textures.addCanvas('allies',allies);C.FRIEND_FRAMES.forEach((_,i)=>allyTexture.add(i,0,i*160,0,160,160));
-    this.art.groundTiles.forEach((tile,i)=>this.textures.addCanvas('terrain-'+i,tile));
-    this.art.groundCaps.forEach((caps,i)=>{
+    this.art.groundTiles?.forEach((tile,i)=>this.textures.addCanvas('terrain-'+i,tile));
+    this.art.groundCaps?.forEach((caps,i)=>{
       this.textures.addCanvas('terrain-cap-left-'+i,caps.left);
       this.textures.addCanvas('terrain-cap-right-'+i,caps.right);
     });
     for(const [name,bounds] of [['crystal',[1109,627,341,372]],['boulder',[1627,690,329,308]]])this.textures.get('ground').add(name,0,...bounds);
     const orb=document.createElement('canvas');orb.width=48;orb.height=48;const oc=orb.getContext('2d');
     const glow=oc.createRadialGradient(20,18,1,24,24,23);glow.addColorStop(0,'#fffce3');glow.addColorStop(.42,'#ffdd76');glow.addColorStop(.65,'#ed982c');glow.addColorStop(1,'rgba(255,190,60,0)');oc.fillStyle=glow;oc.fillRect(0,0,48,48);this.textures.addCanvas('orb',orb);
-    // Mantemos a animação run apenas para a cutscene final. Durante gameplay o
-    // frame vem diretamente do Player.frame, que é calculado pela distância.
-    this.anims.create({key:'run',frames:this.anims.generateFrameNumbers('hero',{start:0,end:7}),frameRate:335/C.RUN_STRIDE*8,repeat:-1});
+    // Fallback legado; o player ativo usa a animação nativa de NativePlayer.
+    if(!useNativePlayer)this.anims.create({key:'run',frames:this.anims.generateFrameNumbers('hero',{start:0,end:C.RUN_FRAMES.length-1}),frameRate:335/C.RUN_STRIDE*C.RUN_FRAMES.length,repeat:-1});
     for(let i=0;i<3;i++)this.anims.create({key:'ally-'+i,frames:[0,1,2,3,2,1].map(n=>({key:'allies',frame:i*4+n})),frameRate:[5,4,6][i],repeat:-1});
   }
   bindInputs(){
@@ -118,7 +121,7 @@ class RunnerScene extends Phaser.Scene {
     $('sound-button').addEventListener('click',()=>this.toggleSound());
   }
   startRun(){if(this.isPortrait())return;this.sound.context?.resume();this.model.start();this.accumulator=0;this.lastState='';}
-  pauseRun(){if(this.model?.state==='playing'){this.model.state='paused';this.music.pause();this.sound.pauseAll();}}
+  pauseRun(){if(this.model?.state==='playing'){this.model.state='paused';this.nativePlayer?.sprite.anims.pause();this.music.pause();this.sound.pauseAll();}}
   resumeRun(){if(this.model.state!=='paused'||this.isPortrait())return;this.model.state='playing';this.sound.resumeAll();if(this.model.audio.enabled)this.music.resume();this.accumulator=0;}
   toggleSound(){this.model.audio.toggle();$('sound-button').textContent=this.model.audio.enabled?'SOM LIGADO':'SOM DESLIGADO';}
   update(time,delta){
@@ -134,21 +137,6 @@ class RunnerScene extends Phaser.Scene {
     }else this.accumulator=0;
     this.renderWorld();this.syncUI();
   }
-  syncGroundMask(segments,distance){
-    let changed=this.maskSegments.length!==segments.length;
-    if(!changed){
-      for(let i=0;i<segments.length;i++){
-        const cached=this.maskSegments[i],segment=segments[i];
-        if(cached.start!==segment.start||cached.end!==segment.end){changed=true;break;}
-      }
-    }
-    if(changed){
-      this.floorMask.clear().fillStyle(0xffffff);
-      for(const segment of segments)this.floorMask.fillRect(segment.start,GROUND-3,segment.end-segment.start,164);
-      this.maskSegments=segments.map(segment=>({start:segment.start,end:segment.end}));
-    }
-    this.floorMask.setPosition(-Math.floor(distance),0);
-  }
   renderWorld(){
     const g=this.model,p=g.player,playing=g.state==='playing';
     this.menu.setVisible(g.state==='menu');this.world.setVisible(g.state!=='menu');
@@ -161,33 +149,7 @@ class RunnerScene extends Phaser.Scene {
     };
     placeBackground(this.background,g.phaseIndex,Math.min(1,g.phaseTime/30));
     this.previous.setVisible(g.phaseFade>0);if(g.phaseFade>0){placeBackground(this.previous,g.previousPhase,1);this.previous.setAlpha(g.phaseFade);}
-    const terrainKey='terrain-'+g.phaseIndex;
-    if(this.terrain.displayTexture.key!==terrainKey)this.terrain.setTexture(terrainKey);
-    this.terrain.tilePositionX=Math.floor(g.track.distance);
-    this.syncGroundMask(g.track.segments,g.track.distance);
-    let edgeView=0;
-    for(const view of this.groundEdgeViews)view.setVisible(false);
-    const placeEdge=(side,worldX)=>{
-      const screenX=Math.floor(worldX-g.track.distance)-(side==='right'?40:0);
-      if(screenX<=-40||screenX>=1280||edgeView>=this.groundEdgeViews.length)return;
-      this.groundEdgeViews[edgeView++]
-        .setTexture('terrain-cap-'+side+'-'+g.phaseIndex)
-        .setPosition(screenX,GROUND-3).setVisible(true);
-    };
-    for(const segment of g.track.segments){
-      placeEdge('left',segment.start);
-      placeEdge('right',segment.end);
-    }
     this.effects.clear();this.foreground.clear();
-    for(let i=0;i<g.track.segments.length-1;i++){
-      const left=g.track.segments[i].end-g.track.distance,right=g.track.segments[i+1].start-g.track.distance;if(right<0||left>1280)continue;
-      this.effects.fillStyle(g.phaseIndex===4?0xc9673e:0x729ca8,.3).fillRect(left,GROUND,right-left,160);
-      for(const [edge,dir] of [[left,1],[right,-1]]){
-        this.effects.fillStyle([0x536b70,0x4c6652,0x966648,0x454e61,0x673a38][g.phaseIndex],1);
-        this.effects.fillPoints([{x:edge,y:GROUND},{x:edge+dir*10,y:GROUND+20},{x:edge+dir*7,y:GROUND+50},{x:edge+dir*21,y:GROUND+95},{x:edge+dir*15,y:720},{x:edge,y:720}],true);
-        this.effects.lineStyle(2,0x172a36,.45);for(let y=GROUND+25;y<720;y+=30)this.effects.lineBetween(edge,y,edge+dir*12,y+7);
-      }
-    }
     if(g.track.supports(p.x))this.effects.fillStyle(0x10202a,.24).fillEllipse(p.x,GROUND+2,55,7);
     if(p.kiActive){
       const wave=Math.sin(g.time*11)*3;
@@ -202,11 +164,13 @@ class RunnerScene extends Phaser.Scene {
       }
     }
 
-    // O gameplay usa UM relógio: Player.runTime/frame. Antes o Phaser tocava
-    // outra animação independente e a corrida visual podia sair de sincronia.
-    this.hero.setPosition(p.x,p.foot).setAlpha(1).stop();
-    if(p.hurtTime>0)this.hero.setTint(0xffb6a3);else this.hero.clearTint();
-    this.hero.setFrame(p.grounded&&p.landTime<=0?p.frame:8+p.frame);
+    // O player ativo usa apenas o relógio de animação nativo do Phaser.
+    if(this.nativePlayer)this.nativePlayer.render(playing);
+    else{
+      this.hero.setPosition(p.x,p.foot).setAlpha(1).stop();
+      if(p.hurtTime>0)this.hero.setTint(0xffb6a3);else this.hero.clearTint();
+      this.hero.setFrame(p.grounded&&p.landTime<=0?p.frame:C.RUN_FRAMES.length+p.frame);
+    }
 
     const alive=this.aliveViews;alive.clear();
     const view=(entity,key)=>{alive.add(entity);let v=this.views.get(entity);if(!v){v=this.add.sprite(0,0,key,0).setOrigin(.5,140/160);this.world.add(v);this.world.bringToTop(this.foreground);this.labels.forEach(l=>this.world.bringToTop(l));this.views.set(entity,v);}return v;};
@@ -259,6 +223,7 @@ class RunnerScene extends Phaser.Scene {
 }
 
 const game=new Phaser.Game({type:Phaser.AUTO,parent:'game-container',width:1280,height:720,backgroundColor:'#102330',
+  physics:{default:'arcade',arcade:{customUpdate:true,gravity:{y:0},fps:60,fixedStep:true}},
   render:{antialias:true,roundPixels:false,powerPreference:'high-performance'},
   fps:{target:60,min:30,forceSetTimeOut:false,smoothStep:true},
   scale:{mode:Phaser.Scale.FIT,autoCenter:Phaser.Scale.CENTER_BOTH},

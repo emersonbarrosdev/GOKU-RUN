@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
   try {
     const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
     const page = await context.newPage();
+    page.on('pageerror', error => console.error('STORY_PAGE_ERROR', error.message));
     const url = process.env.TEST_URL || 'http://127.0.0.1:4173/';
 
     await page.goto(url, { waitUntil: 'networkidle' });
@@ -19,11 +20,13 @@ const assert = require('node:assert/strict');
     await expectText(page, '#story-text', 'fruto roxo');
     await page.getByRole('button', { name: 'PULAR HISTÓRIA' }).waitFor({ state: 'visible' });
 
-    const previewCanvas = page.locator('#story-runner-preview canvas');
+    const previewCanvas = page.locator('#story-runner-preview img');
     await previewCanvas.waitFor({ state: 'visible', timeout: 5000 });
     await page.waitForTimeout(150);
-    const preview = await previewCanvas.evaluate(canvas => {
+    const preview = await previewCanvas.evaluate(image => {
+      const canvas=document.createElement('canvas');canvas.width=canvas.height=160;
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(image,0,0,160,160);
       const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
       let solid = 0;
       let orange = 0;
@@ -76,7 +79,10 @@ const assert = require('node:assert/strict');
     await page.waitForTimeout(250);
     assert.equal(await story.isVisible(), false, 'história já vista deve ser pulada automaticamente');
     start = page.getByRole('button', { name: 'JOGAR' });
-    await start.waitFor({ state: 'visible', timeout: 5000 });
+    await start.waitFor({ state: 'visible', timeout: 5000 }).catch(async error => {
+      console.error('STORY_RELOAD_STATE', await page.locator('#panel').evaluate(el => el.outerHTML));
+      throw error;
+    });
     await replayStory.waitFor({ state: 'visible', timeout: 5000 });
 
     // Mas ela nunca pode "sumir": o menu precisa permitir rever os 3 capítulos.
