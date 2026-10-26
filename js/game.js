@@ -1,7 +1,7 @@
 (() => {
   "use strict";
-  // Legacy model clock mirrors the reference at half speed: 680ms per cycle.
-  // Gameplay animation itself is owned by Phaser (native-player.mjs).
+  // Deterministic simulation stride metadata; visual animation is owned by
+  // Phaser (native-player.mjs) and deliberately decoupled from this clock.
   const RUN_STRIDE = 335 * .68;
   const GROUND_TILE_WIDTH = 840;
 
@@ -63,82 +63,9 @@
     fall: "fall", land: "land", gameOver: "game_over",
   };
 
-  function rounded(ctx, x, y, w, h, r = 12) {
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, h, r);
-  }
-  function text(ctx, value, x, y, size = 16, color = "#fff", weight = 700) {
-    ctx.font = weight + " " + size + "px 'Segoe UI', Arial, sans-serif";
-    ctx.fillStyle = color;
-    ctx.fillText(value, x, y);
-  }
-  function heart(ctx, x, y, alive) {
-    ctx.beginPath();
-    ctx.moveTo(x, y + 5);
-    ctx.bezierCurveTo(x - 12, y - 6, x - 17, y + 9, x, y + 21);
-    ctx.bezierCurveTo(x + 17, y + 9, x + 12, y - 6, x, y + 5);
-    ctx.closePath();
-    ctx.fillStyle = alive ? "#ff5d6b" : "#24313f";
-    ctx.fill();
-    ctx.strokeStyle = alive ? "#ff9ba2" : "#55606c";
-    ctx.lineWidth = 1.2;
-    ctx.stroke();
-  }
-
-  class AudioManager {
-    constructor() {
-      this.enabled = true;
-      this.sounds = {};
-      this.music = null;
-      if (typeof Audio === "undefined") return;
-      for (const [key, file] of Object.entries(SFX)) {
-        this.sounds[key] = Array.from({length:2},()=>{
-          const voice=new Audio("./assets/sfx/" + file + ".wav");
-          voice.preload="auto";return voice;
-        });
-      }
-      this.music = new Audio();
-      // Some embedded Chromium builds omit MP3; keep the original and use Vorbis.
-      this.music.src = this.music.canPlayType('audio/ogg; codecs="vorbis"') ?
-        "./assets/sounds/trilha.ogg" : "./assets/sounds/trilha.mp3";
-      this.music.preload="auto";this.music.loop=true;this.music.volume=.35;
-    }
-    play(key, volume = .25) {
-      if (!this.enabled || !this.sounds[key]) return;
-      // Bounded, preloaded voices. No new media element/network setup per step.
-      const sound = this.sounds[key].find(voice=>voice.paused||voice.ended);
-      if(!sound || sound.readyState<2)return;
-      sound.currentTime=0;
-      sound.volume = volume;
-      sound.play().catch(() => {});
-    }
-    startMusic() {
-      this.stopMusic();
-      if (!this.enabled || typeof Audio === "undefined") return;
-      if(this.music){this.music.currentTime=0;this.music.play().catch(() => {});}
-    }
-    stopMusic() {
-      if (this.music) this.music.pause();
-    }
-    toggle() {
-      this.enabled = !this.enabled;
-      if (!this.enabled) this.stopMusic();
-    }
-  }
-
   class Assets {
     constructor() {
-      this.images = {}; this.groundTiles = [];
-    }
-    async load() {
-      await Promise.all(Object.entries(PATHS).map(([key, path]) => new Promise((resolve, reject) => {
-        const image = new Image();
-        image.onload = () => { this.images[key] = image; resolve(); };
-        image.onerror = () => reject(new Error("Não foi possível carregar: " + path));
-        image.src = path + "?v=7";
-      })));
-      this.prepareSpriteCutouts();
-      this.prepareGround();
+      this.images = {};
     }
     prepareSpriteCutouts() {
       // Generated PNGs contain a low-opacity matte outside the painted figures.
@@ -152,22 +79,6 @@
         c.putImageData(pixels,0,0);this.images[key]=surface;
       }
       this.images.jump=this.images.run;
-    }
-    prepareGround() {
-      // All color conversion/texture scaling happens once, never at a tile wrap.
-      const filters = ["none","hue-rotate(12deg)","sepia(.75) saturate(.8)",
-        "grayscale(.9) brightness(.75)","grayscale(.7) brightness(.65)"];
-      this.groundTiles = PHASES.map((phase,index) => {
-        const tile = document.createElement("canvas"); tile.width=840;tile.height=164;
-        const c=tile.getContext("2d"); c.filter=filters[index];
-        c.drawImage(this.images.terrain,0,0,420,164);
-        c.save();c.translate(840,0);c.scale(-1,1);c.drawImage(this.images.terrain,0,0,420,164);c.restore();
-        c.filter="none";
-        if(phase.tint){c.fillStyle=phase.tint;c.fillRect(0,0,840,164);}
-        const shade=c.createLinearGradient(0,0,0,164);
-        shade.addColorStop(0,"rgba(6,10,20,0)");shade.addColorStop(1,"rgba(6,10,20,.48)");
-        c.fillStyle=shade;c.fillRect(0,0,840,164);return tile;
-      });
     }
     sprite(ctx, key, bounds, cx, foot, height, flip = false, alpha = 1) {
       const image = this.images[key];
@@ -187,10 +98,6 @@
       if(flip)ctx.scale(-1,1);
       ctx.drawImage(image,...bounds,(bounds[0]-pivot[0])*scale,(bounds[1]-pivot[1])*scale,bounds[2]*scale,bounds[3]*scale);
       ctx.restore();
-    }
-    cell(ctx, key, col, row, cx, foot, height, flip = false) {
-      const bounds = ENEMY_FRAMES[key][row * 4 + col];
-      this.sprite(ctx, key, bounds, cx, foot, height, flip);
     }
   }
 
@@ -280,44 +187,6 @@
       if (this.airTime < .08) return 0;
       return this.vy < 70 ? 1 : 2;
     }
-    get pose() {
-      const key = this.grounded && this.landTime <= 0 ? "run" : "jump";
-      const bounds = (key === "run" ? RUN_FRAMES : JUMP_FRAMES)[this.frame];
-      const pivot=(key==="run"?RUN_PIVOTS:JUMP_PIVOTS)[this.frame];
-      return { key, bounds, pivot, scale: PLAYER_SCALE[key], height: bounds[3] * PLAYER_SCALE[key] };
-    }
-    draw(ctx, assets, time) {
-      if (this.kiActive) {
-        // Layered, open-ended flame tongues and trailing sparks — no oval shield.
-        ctx.save(); ctx.translate(this.x, this.foot); ctx.globalCompositeOperation = "screen";
-        const flame = ctx.createLinearGradient(0, 5, 0, -142);
-        flame.addColorStop(0, "rgba(255,153,31,.04)");
-        flame.addColorStop(.5, "rgba(255,198,66,.32)");
-        flame.addColorStop(1, "rgba(255,241,164,0)");
-        ctx.fillStyle = flame;
-        for (let i = 0; i < 7; i++) {
-          const x = -40 + i * 12;
-          const wave = Math.sin(time * 15 + i * 2.7) * 9;
-          const height = 72 + Math.sin(i * 1.7) * 28 + (1 - Math.abs(x) / 55) * 42;
-          ctx.beginPath(); ctx.moveTo(x - 13, 4);
-          ctx.quadraticCurveTo(x - 26, -height * .45, x - 10 + wave, -height);
-          ctx.lineTo(x + 4, -height * .53);
-          ctx.quadraticCurveTo(x + 15, -height * .22, x + 13, 3);
-          ctx.fill();
-        }
-        for (let i = 0; i < 10; i++) {
-          const cycle = (time * 1.8 + i * .137) % 1;
-          const x = -20 - cycle * 86, y = -12 - (i % 5) * 19 - cycle * 15;
-          ctx.globalAlpha = (1 - cycle) * .8;
-          ctx.fillStyle = i % 2 ? "#ffe7a0" : "#ffbe53";
-          ctx.fillRect(x, y, 4 + cycle * 7, 1.5);
-        }
-        ctx.restore();
-      }
-      const alpha = this.invulnerable > 0 && Math.floor(this.invulnerable * 16) % 2 === 0 ? .45 : 1;
-      const pose = this.pose;
-      assets.frame(ctx, pose.key, pose.bounds, pose.pivot, this.x, this.foot, pose.scale, false, alpha);
-    }
   }
 
   class Track {
@@ -359,50 +228,10 @@
         return items;
       }, []);
     }
-    draw(ctx, assets, phase) {
-      const texture = assets.groundTiles[PHASES.indexOf(phase)];
-      if (!texture) return;
-      ctx.save();
-      ctx.beginPath();
-      for (const segment of this.segments) {
-        ctx.rect(segment.start - this.distance, GROUND - 3, segment.end - segment.start, H - GROUND + 4);
-      }
-      ctx.clip();
-      for (const tile of this.visibleTiles()) ctx.drawImage(texture, tile.x, GROUND - 3);
-      ctx.restore();
-      this.drawPitWalls(ctx, phase);
-    }
     visibleTiles() {
       const first=Math.floor(this.distance/GROUND_TILE_WIDTH);
       const last=Math.floor((this.distance+W)/GROUND_TILE_WIDTH);
       return Array.from({length:last-first+1},(_,i)=>({index:first+i,x:(first+i)*GROUND_TILE_WIDTH-this.distance}));
-    }
-    drawPitWalls(ctx, phase) {
-      const index=PHASES.indexOf(phase);
-      const stone=["#546b74","#496451","#986849","#475065","#59383b"][index] || "#546b74";
-      for(let i=0;i<this.segments.length-1;i++) {
-        const left=this.segments[i].end-this.distance,right=this.segments[i+1].start-this.distance;
-        if(right<0||left>W||right<=left)continue;
-        ctx.save();ctx.beginPath();ctx.rect(left,GROUND,right-left,H-GROUND);ctx.clip();
-        // Distant scenery remains visible down the ravine; only the bottom gets mist.
-        const fog=ctx.createLinearGradient(0,GROUND,0,H);
-        fog.addColorStop(0,"rgba(42,73,84,.12)");fog.addColorStop(1,index===4?"rgba(247,83,28,.5)":"rgba(79,126,142,.62)");
-        ctx.fillStyle=fog;ctx.fillRect(left,GROUND,right-left,H-GROUND);
-        for(const [edge,dir] of [[left,1],[right,-1]]) {
-          ctx.save();ctx.fillStyle=stone;ctx.beginPath();ctx.moveTo(edge,GROUND);
-          ctx.lineTo(edge+dir*10,GROUND+19);ctx.lineTo(edge+dir*8,GROUND+47);
-          ctx.lineTo(edge+dir*22,GROUND+87);ctx.lineTo(edge+dir*15,H);ctx.lineTo(edge,H);ctx.closePath();ctx.fill();
-          ctx.clip();
-          const wall=ctx.createLinearGradient(edge,0,edge+dir*22,0);
-          wall.addColorStop(0,"rgba(18,23,31,.78)");wall.addColorStop(.6,"rgba(66,74,79,.2)");wall.addColorStop(1,"rgba(156,174,168,.4)");
-          ctx.fillStyle=wall;ctx.fillRect(Math.min(edge,edge+dir*24),GROUND,24,H-GROUND);
-          ctx.strokeStyle="rgba(15,29,40,.35)";ctx.lineWidth=2;
-          for(let y=GROUND+27;y<H;y+=31){ctx.beginPath();ctx.moveTo(edge,y);ctx.lineTo(edge+dir*13,y+7);ctx.stroke();}
-          ctx.restore();
-          ctx.fillStyle="rgba(230,224,166,.38)";ctx.fillRect(edge+(dir<0?-5:0),GROUND,5,4);
-        }
-        ctx.restore();
-      }
     }
   }
 
@@ -443,50 +272,6 @@
       if(this.chargeTime<.38 || this.x>1000 || this.x<450)return false;
       this.shot=true;this.recoil=.2;return true;
     }
-    draw(ctx, assets) {
-      if (this.type === "blast") {
-        const gradient = ctx.createLinearGradient(this.x - 32, 0, this.x + 45, 0);
-        gradient.addColorStop(0, "#fff8c2"); gradient.addColorStop(.25, this.airborne ? "#c47bff" : "#ff9e4e");
-        gradient.addColorStop(1, "rgba(255,90,42,0)");
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.moveTo(this.x + 44, this.foot - 13);
-        ctx.quadraticCurveTo(this.x - 33, this.foot - 39, this.x - 33, this.foot - 13);
-        ctx.quadraticCurveTo(this.x - 33, this.foot + 10, this.x + 44, this.foot - 13);
-        ctx.fill();
-      } else if (this.type === "flyer") {
-        // An aerodynamic flight pose, never a running cycle suspended in air.
-        ctx.save();ctx.globalAlpha=.45;ctx.strokeStyle="#c19bff";ctx.lineWidth=2;
-        for(let i=0;i<3;i++){
-          const tail=18+((this.age*110+i*17)%45);
-          ctx.beginPath();ctx.moveTo(this.x+29,this.foot-18-i*9);ctx.lineTo(this.x+tail+40,this.foot-18-i*9);ctx.stroke();
-        }ctx.restore();
-        const frame=this.flightFrame;
-        assets.frame(ctx,"enemies",FLIGHT_FRAMES[frame],FLIGHT_PIVOTS[frame],this.x,this.foot,.23);
-        this.drawCharge(ctx);
-      } else if (this.type === "soldier") {
-        const frame=Math.floor(this.runPhase*4)%4;
-        assets.frame(ctx,"enemies",SOLDIER_FRAMES[frame],SOLDIER_PIVOTS[frame],this.x,this.foot,.23);
-        this.drawCharge(ctx);
-      } else {
-        assets.cell(ctx, "ground", this.type === "crystal" ? 2 : 3, 1, this.x, this.foot, this.height);
-      }
-      if (this.type !== "blast") {
-        ctx.fillStyle = "#ff685e";
-        ctx.beginPath();
-        ctx.moveTo(this.x, this.foot - this.height - 10);
-        ctx.lineTo(this.x - 4, this.foot - this.height - 16);
-        ctx.lineTo(this.x + 4, this.foot - this.height - 16);
-        ctx.fill();
-      }
-    }
-    drawCharge(ctx) {
-      if((this.shot && this.recoil<=0)||this.chargeTime<=0)return;
-      ctx.save();ctx.shadowColor=this.airborne?"#b991ff":"#ffbd62";ctx.shadowBlur=12;
-      ctx.fillStyle=this.airborne?"#e6d6ff":"#ffe8b2";ctx.beginPath();
-      ctx.arc(this.x-36,this.foot-(this.airborne?40:55),3+Math.min(1,this.chargeTime/.38)*5,0,Math.PI*2);
-      ctx.fill();ctx.restore();
-    }
   }
 
   class Friend {
@@ -505,27 +290,9 @@
       this.x -= speed * dt;
       if (this.x < -120) this.active = false;
     }
-    draw(ctx, assets) {
-      const bounds = FRIEND_FRAMES[this.frame];
-      // One scale per character, including raised hands and moving cape.
-      const sourceHeight = [393, 474, 306][this.variant];
-      const height = bounds[3] / sourceHeight * this.height;
-      assets.sprite(ctx, "friends", bounds, this.x, GROUND, height, false, this.touched ? .6 : 1);
-    }
   }
 
   class Game {
-    constructor(canvas, assets) {
-      this.canvas = canvas; this.ctx = canvas.getContext("2d"); this.assets = assets;
-      this.audio = new AudioManager();
-      this.startButton = document.getElementById("start-button");
-      this.player = new Player(); this.track = new Track();
-      this.best = 0;
-      try { this.best = Number(localStorage.getItem("goku-run-v5-best")) || 0; } catch {}
-      this.state = "loading"; this.last = 0; this.accumulator = 0; this.inspectionUntil = 0;
-      this.reset();
-      this.bind();
-    }
     get phase() { return PHASES[this.phaseIndex]; }
     reset() {
       this.player.reset(); this.track.reset();
@@ -541,46 +308,8 @@
       this.reset(); this.state = "playing"; this.accumulator = 0;
       this.audio.startMusic();
     }
-    bind() {
-      const jump = () => {
-        this.inspectionUntil = 0;
-        if (this.state === "menu" || this.state === "game-over" || this.state === "victory") this.start();
-        else if (this.state === "paused") this.state = "playing";
-        else if (this.state === "playing") this.player.queueJump();
-      };
-      this.canvas.addEventListener("pointerdown", event => {
-        event.preventDefault(); this.canvas.focus();
-        const rect = this.canvas.getBoundingClientRect();
-        const x = (event.clientX - rect.left) * W / rect.width;
-        const y = (event.clientY - rect.top) * H / rect.height;
-        if (this.state === "playing" && x > 840 && y < 100) this.activateKi();
-        else jump();
-      });
-      this.startButton.addEventListener("click", () => { this.canvas.focus(); jump(); });
-      window.addEventListener("keydown", event => {
-        this.inspectionUntil = 0;
-        if (event.target === this.startButton) return;
-        const key = event.key.toLowerCase();
-        if ([" ", "arrowup", "w"].includes(key)) {
-          event.preventDefault();
-          if (!event.repeat) jump();
-        } else if (key === "k" && !event.repeat) {
-          this.activateKi();
-        } else if (key === "p" && !event.repeat) {
-          if (this.state === "playing") this.state = "paused";
-          else if (this.state === "paused") this.state = "playing";
-        } else if (key === "m" && !event.repeat) {
-          this.audio.toggle();
-          if (this.audio.enabled && this.state === "playing") this.audio.startMusic();
-        }
-      });
-      document.addEventListener("visibilitychange", () => {
-        if (document.hidden && this.state === "playing") this.state = "paused";
-      });
-    }
     activateKi() {
       if (this.state !== "playing" || !this.player.activateKi()) return false;
-      this.inspectionUntil = 0;
       this.audio.play("activate", .4);
       this.burst(this.player.x, this.player.foot - 45, "#ffe4a1", 18);
       this.message("KI ATIVO • PONTOS ×3", this.player.x, this.player.foot - 130, "#ffe486");
@@ -773,199 +502,13 @@
       });
     }
     message(value, x, y, color) { this.messages.push({ value, x, y, color, life: 1.15 }); }
-    drawBackground(index, alpha = 1, progress = this.phaseTime / PHASE_SECONDS) {
-      const image = this.assets.images["world"+index];
-      if (!image) return;
-      const ctx = this.ctx;
-      ctx.save(); ctx.globalAlpha = alpha;
-      // Traverse one panoramic image exactly once per stage. No modulo/reset
-      // while a stage is playing. Full-height art is visible through ravines.
-      ctx.drawImage(image, ...panoramaWindow(index,progress), 0, 0, W, H);
-      ctx.restore();
-    }
-    drawWorld() {
-      const ctx = this.ctx;
-      ctx.fillStyle = "#121e2c"; ctx.fillRect(0, 0, W, H);
-      this.drawBackground(this.phaseIndex);
-      if (this.phaseFade > 0) this.drawBackground(this.previousPhase, this.phaseFade, 1);
-      this.drawBirds();
-      this.track.draw(ctx, this.assets, this.phase);
-      for (const orb of this.orbs) {
-        const y = orb.y + Math.sin(orb.age * 4) * 3;
-        ctx.save(); ctx.shadowColor = "#ffd95e"; ctx.shadowBlur = 14;
-        const glow = ctx.createRadialGradient(orb.x - 3, y - 4, 1, orb.x, y, 12);
-        glow.addColorStop(0, "#fffce0"); glow.addColorStop(.5, "#ffd369"); glow.addColorStop(1, "#e67d28");
-        ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(orb.x, y, 11, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
-        text(ctx, "✦", orb.x - 5, y + 4, 11, "#bc5b1d");
-      }
-      for (const friend of this.friends) friend.draw(ctx, this.assets);
-      for (const enemy of this.enemies) enemy.draw(ctx, this.assets);
-      if (this.track.supports(this.player.x)) {
-        ctx.fillStyle = "rgba(15,20,21,.25)";
-        ctx.beginPath(); ctx.ellipse(this.player.x, GROUND + 2, 29, 4, 0, 0, Math.PI * 2); ctx.fill();
-      }
-      this.player.draw(ctx, this.assets, this.time);
-      for (const impact of this.groundImpacts) {
-        const age = 1 - impact.life / .22;
-        ctx.save(); ctx.globalAlpha = (1 - age) * .45; ctx.strokeStyle = "#eadbb9";
-        ctx.lineWidth = 2 * (1 - age);
-        ctx.beginPath(); ctx.ellipse(impact.x, GROUND + 2, 16 + age * 40, 2 + age * 3, 0, 0, Math.PI * 2);
-        ctx.stroke(); ctx.restore();
-      }
-      for (const p of this.particles) {
-        ctx.globalAlpha = clamp(p.life * 3, 0, 1); ctx.fillStyle = p.color;
-        ctx.fillRect(p.x, p.y, p.size, p.size);
-      }
-      ctx.globalAlpha = 1;
-      for (const m of this.messages) {
-        ctx.save(); ctx.globalAlpha = clamp(m.life * 2, 0, 1); ctx.textAlign = "center";
-        ctx.shadowColor = "#10202e"; ctx.shadowBlur = 4;
-        text(ctx, m.value, m.x, m.y, 13, m.color, 800); ctx.restore();
-      }
-    }
-    drawBirds() {
-      if (this.phaseIndex > 2) return;
-      const ctx = this.ctx;
-      ctx.save(); ctx.strokeStyle = "rgba(26,49,59,.35)"; ctx.lineWidth = 2;
-      for (let i = 0; i < 3; i++) {
-        const x = W - (this.time * 35 + i * 74) % (W + 80);
-        const y = 190 + i * 17, flap = Math.sin(this.time * 6 + i) * 5;
-        ctx.beginPath(); ctx.moveTo(x - 10, y - flap); ctx.quadraticCurveTo(x - 5, y - 5, x, y);
-        ctx.quadraticCurveTo(x + 5, y - 5, x + 10, y - flap); ctx.stroke();
-      }
-      ctx.restore();
-    }
-    drawHud() {
-      const ctx = this.ctx, p = this.player;
-      rounded(ctx, 24, 20, W - 48, 76, 14);
-      ctx.fillStyle = "rgba(8,18,28,.91)"; ctx.fill();
-      ctx.strokeStyle = "rgba(221,239,242,.15)"; ctx.lineWidth = 1; ctx.stroke();
-      text(ctx, "PONTOS", 44, 42, 10, "#a6b7bf");
-      text(ctx, String(Math.floor(this.score)).padStart(5, "0"), 44, 74, 25);
-      text(ctx, "RECORDE", 171, 42, 10, "#a6b7bf");
-      text(ctx, String(this.best).padStart(5, "0"), 171, 74, 25, "#c8d5dd");
-      text(ctx, "VIDAS", 301, 42, 10, "#a6b7bf");
-      for (let i = 0; i < 3; i++) heart(ctx, 313 + i * 32, 55, i < p.lives);
-      ctx.fillStyle = "rgba(201,222,229,.13)"; ctx.fillRect(414, 37, 1, 42);
-      text(ctx, "FASE " + (this.phaseIndex + 1) + " / 5", 438, 42, 10, "#ffc485");
-      text(ctx, this.phase.name, 438, 66, 17);
-      rounded(ctx, 438, 79, 360, 4, 2); ctx.fillStyle = "#304049"; ctx.fill();
-      const progress = clamp(this.phaseTime / PHASE_SECONDS, 0, 1);
-      if (progress > 0) { ctx.fillStyle = "#f4b96b"; ctx.fillRect(438, 79, 360 * progress, 4); }
-      ctx.fillStyle = "rgba(201,222,229,.13)"; ctx.fillRect(830, 37, 1, 42);
-      text(ctx, p.kiActive ? "KI ATIVO  ×3" : p.kiReady ? "KI PRONTO" : "ENERGIA KI", 855, 42, 10, "#ffe09b");
-      const amount = p.kiActive ? p.kiTime / KI_DURATION : p.charge / 100;
-      rounded(ctx, 855, 54, 222, 10, 5); ctx.fillStyle = "#304049"; ctx.fill();
-      if (amount > 0) {
-        rounded(ctx, 855, 54, Math.max(5, 222 * amount), 10, 5);
-        ctx.fillStyle = p.kiActive ? "#ffe1a0" : "#efb65e"; ctx.fill();
-      }
-      text(ctx, p.kiActive ? "RESERVA " + p.reserve.toFixed(1).replace(".0", "") + "%" :
-        p.kiReady ? "PRESSIONE K" : Math.round(p.charge) + "% • 8 ESFERAS", 855, 82, 10, "#b4c7d0");
-      if (p.kiActive && p.reserve > 0) {
-        ctx.fillStyle = "#88dabc"; ctx.fillRect(855, 67, 222 * p.reserve / 100, 3);
-      }
-      rounded(ctx, 1110, 42, 116, 34, 8); ctx.strokeStyle = "#51616c"; ctx.stroke();
-      text(ctx, p.kiReady ? "K  ATIVAR" : p.kiActive ? "×3 PONTOS" : "K  CARREGAR", 1122, 64, 12,
-        p.kiReady || p.kiActive ? "#ffe1a0" : "#8b9aa4");
-    }
-    drawPhaseBanner() {
-      if (this.phaseBanner <= 0) return;
-      const ctx = this.ctx;
-      ctx.save(); ctx.globalAlpha = clamp(this.phaseBanner / .4, 0, 1); ctx.textAlign = "center";
-      rounded(ctx, 420, 118, 440, 66, 12); ctx.fillStyle = "rgba(8,18,28,.86)"; ctx.fill();
-      text(ctx, this.phase.location + "  /  ETAPA " + (this.phaseIndex + 1), W / 2, 143, 11, "#ffc485");
-      text(ctx, this.phase.name, W / 2, 169, 21);
-      ctx.restore();
-    }
-    drawResult(won) {
-      const ctx = this.ctx;
-      ctx.fillStyle = "rgba(4,10,19,.76)"; ctx.fillRect(0, 0, W, H);
-      rounded(ctx, 350, 170, 580, 365, 22); ctx.fillStyle = "#101d2b"; ctx.fill();
-      ctx.strokeStyle = "#42505c"; ctx.lineWidth = 1; ctx.stroke();
-      ctx.save(); ctx.textAlign = "center";
-      text(ctx, won ? "TRAVESSIA COMPLETA" : "FIM DE CORRIDA", W / 2, 232, 33);
-      text(ctx, this.newRecord ? "NOVO RECORDE!" : won ? "Cinco paisagens. Uma jornada." : "Respire. Ajuste o salto. Tente de novo.",
-        W / 2, 265, 15, this.newRecord ? "#ffe19a" : "#aabdc9");
-      text(ctx, String(Math.floor(this.score)).padStart(5, "0"), W / 2, 337, 52, "#ffe1a0");
-      text(ctx, "PONTOS  •  FASE " + (this.phaseIndex + 1) + "/5  •  RECORDE " + this.best, W / 2, 368, 12, "#b9c9d4");
-      text(ctx, "Aliados: pule por cima. Voadores: passe por baixo.", W / 2, 497, 13, "#aabdc9");
-      ctx.restore();
-    }
-    draw() {
-      const ctx = this.ctx;
-      ctx.clearRect(0, 0, W, H);
-      const buttonStates = ["menu", "game-over", "victory", "paused"];
-      const hidden = !buttonStates.includes(this.state);
-      if(this.startButton.hidden!==hidden)this.startButton.hidden=hidden;
-      if(this.startButton.dataset.mode!==this.state)this.startButton.dataset.mode=this.state;
-      const label = this.state === "menu" ? "INICIAR CORRIDA" : this.state === "paused" ? "CONTINUAR" : "CORRER NOVAMENTE";
-      if (this.startButton.textContent !== label) this.startButton.textContent = label;
-      if (this.state === "loading" || this.state === "error") {
-        ctx.fillStyle = "#101c29"; ctx.fillRect(0, 0, W, H);
-        ctx.textAlign = "center";
-        text(ctx, this.state === "error" ? "Falha ao carregar o jogo" : "Preparando a corrida…", W / 2, 330, 28);
-        if (this.error) text(ctx, this.error, W / 2, 370, 14, "#ffaaa4");
-        ctx.textAlign = "left"; return;
-      }
-      if (this.state === "menu") {
-        ctx.drawImage(this.assets.images.menu, 0, 0, W, H);
-        // Art has no baked button or instructions; keep these live and accurate.
-        ctx.save(); ctx.shadowColor = "rgba(55,0,0,.9)"; ctx.shadowBlur = 5;
-        text(ctx, "Pule no chão. Passe por baixo dos voadores.", 82, 337, 17, "#fff3e9");
-        text(ctx, "Junte 8 esferas. K ativa o KI e pontos ×3.", 82, 363, 16, "#ffe2c4");
-        text(ctx, "Poupe os aliados — encostar custa uma vida.", 82, 388, 15, "#ffd1bf");
-        ctx.restore();
-        return;
-      }
-      ctx.save();
-      if (this.state === "playing" && this.impactTime > 0) {
-        const t = this.impactTime / .14;
-        ctx.translate(0, Math.sin((1 - t) * Math.PI) * this.impactStrength * t);
-      }
-      this.drawWorld(); ctx.restore(); this.drawHud();
-      if (this.state === "playing") this.drawPhaseBanner();
-      if (this.state === "game-over" || this.state === "victory") this.drawResult(this.state === "victory");
-      if (this.state === "paused") {
-        ctx.fillStyle = "rgba(5,12,23,.6)"; ctx.fillRect(0, 0, W, H); ctx.textAlign = "center";
-        text(ctx, "PAUSADO", W / 2, 330, 38); text(ctx, "P para continuar", W / 2, 370, 18, "#c2cfd7");
-        ctx.textAlign = "left";
-      }
-      if (this.flash > 0) { ctx.fillStyle = "rgba(248,83,78," + this.flash + ")"; ctx.fillRect(0, 0, W, H); }
-    }
-    frame(now) {
-      const dt = this.last ? Math.min((now - this.last) / 1000, .1) : 0;
-      this.last = now;
-      if (now >= this.inspectionUntil) {
-        this.accumulator += dt;
-        // Fixed physics avoids browser refresh rate changing jump/collision timing.
-        while (this.accumulator >= 1 / 120) { this.update(1 / 120); this.accumulator -= 1 / 120; }
-        this.draw();
-      }
-      requestAnimationFrame(time => this.frame(time));
-    }
   }
 
   const core = { Player, Track, Enemy, Friend, Game, Assets, PHASES, PATHS,
     JUMP_FRAMES, RUN_FRAMES, PLAYER_SCALE, FRIEND_FRAMES, overlap, GROUND, PLAYER_HEIGHT, KI_PER_ORB,
     RUN_STRIDE, GROUND_TILE_WIDTH, panoramaWindow, PANELS, RUN_PIVOTS, JUMP_PIVOTS, SOLDIER_FRAMES, FLIGHT_FRAMES,
-    SOLDIER_PIVOTS, FLIGHT_PIVOTS, AudioManager, SFX };
+    SOLDIER_PIVOTS, FLIGHT_PIVOTS, SFX };
   if (typeof module !== "undefined" && module.exports) module.exports = core;
   if (typeof document === "undefined") return;
   window.GokuCore=core;
-  const canvas = document.getElementById("game");
-  if (!canvas) return;
-  const assets = new Assets(), game = new Game(canvas, assets);
-  const params = new URLSearchParams(location.search);
-  // Debug is opt-in and used by the regression/visual checks, not normal play.
-  if (params.get("debug") === "1") {
-    game.persistResults = false;
-    window.__gokuRun = { game, core };
-  }
-  requestAnimationFrame(now => game.frame(now));
-  assets.load().then(() => {
-    game.state = "menu";
-    if (params.get("autostart") === "1") { game.start(); game.audio.stopMusic(); }
-  }).catch(error => { console.error(error); game.state = "error"; game.error = error.message; });
 })();

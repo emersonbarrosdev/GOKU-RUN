@@ -1,5 +1,5 @@
 {
-  "framework": "vite",
+  "framework": "angular",
   "buildCommand": "npm run build",
   "outputDirectory": "dist"
 }

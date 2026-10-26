@@ -127,23 +127,16 @@ test('air encounters are deferred near pits and do not overlap existing ground e
   g.spawnEncounter(); assert.equal(g.enemies.length, 1);
 });
 
-test('run and jump retain anatomical scale; tucked poses are never enlarged to fill a box', () => {
-  const p = new Player(), seen = [], assets = { frame(...args) { seen.push(args); } };
-  const ctx = {};
-  for (let i = 0; i < RUN_FRAMES.length; i++) { p.runTime = i; p.draw(ctx, assets, 0); }
-  p.grounded = false; p.airTime = 0; p.draw(ctx, assets, 0);
-  p.airTime = .2; p.vy = -100; p.draw(ctx, assets, 0);
-  p.vy = 100; p.draw(ctx, assets, 0);
-  p.grounded = true; p.landTime = .05; p.draw(ctx, assets, 0);
-  assert.equal(new Set(seen.map(args => args[1] + ':' + (args[1] === 'run' ? RUN_FRAMES : JUMP_FRAMES).indexOf(args[2]))).size, RUN_FRAMES.length+4);
-  const runScales=seen.filter(args=>args[1]==='run').map(args=>args[6]);
-  const jumpScales=seen.filter(args=>args[1]==='jump').map(args=>args[6]);
-  assert.ok(runScales.every(scale=>scale===PLAYER_SCALE.run),'all run poses use one anatomical scale');
-  assert.ok(jumpScales.every(scale=>scale===PLAYER_SCALE.jump),'all jump poses use one anatomical scale');
-  assert.ok(seen.every(args=>args[4]===p.x && args[5]===GROUND));
-  for (const args of seen) {
-    const pivots=args[1]==='run'?RUN_PIVOTS:JUMP_PIVOTS;
-    assert.ok(pivots.includes(args[3]),'use explicit anatomical origin, not recrop center');
+test('native player frames share one cell, scale and explicit foot pivot', () => {
+  assert.equal(RUN_FRAMES.length,10);assert.equal(JUMP_FRAMES.length,4);
+  assert.equal(PLAYER_SCALE.run,.65);assert.equal(PLAYER_SCALE.jump,.65);
+  for(let i=0;i<RUN_FRAMES.length;i++){
+    const [x,y,w,h]=RUN_FRAMES[i];assert.deepEqual([w,h],[256,256]);
+    assert.deepEqual(RUN_PIVOTS[i],[x+128,y+240]);
+  }
+  for(let i=0;i<JUMP_FRAMES.length;i++){
+    const [x,y,w,h]=JUMP_FRAMES[i];assert.deepEqual([w,h],[256,256]);
+    assert.deepEqual(JUMP_PIVOTS[i],[x+128,y+240]);
   }
 });
 
