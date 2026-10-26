@@ -6,7 +6,7 @@
     "dev": "ng serve --host 0.0.0.0 --port 5173",
     "build": "ng build",
     "preview": "ng serve --configuration production --host 0.0.0.0 --port 4173",
-    "test": "node --require ./js/goku-visual-config.cjs --test tests/game.test.cjs tests/runtime-step.test.cjs && node --require ./js/goku-visual-config.cjs tests/playthrough.cjs",
+    "test": "node --require ./js/goku-visual-config.cjs --test tests/game.test.cjs tests/runtime-step.test.cjs tests/campaign.test.cjs && node --require ./js/goku-visual-config.cjs tests/playthrough.cjs",
     "art:import-gif": "node tools/import-run-gif.cjs",
     "test:browser": "node tests/browser-review.cjs",
     "test:mobile": "node tests/mobile-smoke.cjs",
@@ -14,6 +14,7 @@
     "test:story": "node tests/story-smoke.cjs",
     "test:render": "node tests/native-player.cjs && node tests/gif-fidelity.cjs && node tests/ground-fidelity.cjs",
     "test:player-native": "node tests/native-player.cjs",
+    "test:campaign": "node --test tests/campaign.test.cjs",
     "android:sync": "npm run build && cap sync android",
     "android:open": "cap open android",
     "android:apk": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-android.ps1"
