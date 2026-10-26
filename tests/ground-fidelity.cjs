@@ -1,20 +1,26 @@
-const {spawnSync}=require('node:child_process');
 const assert=require('node:assert/strict');
+const crypto=require('node:crypto');
+const fs=require('node:fs');
 
-const file='assets/game/ground/ground-tile.png';
-const result=spawnSync('ffmpeg',['-v','error','-i',file,'-f','rawvideo','-pix_fmt','rgba','pipe:1'],{
-  maxBuffer:8*1024*1024,windowsHide:true,
-});
-assert.equal(result.status,0,result.stderr.toString());
-const width=1024,height=256,pixels=result.stdout;
-assert.equal(pixels.length,width*height*4);
-let opaque=0,differentRows=0;
-for(let y=0;y<height;y++){
-  const left=(y*width)*4,right=(y*width+width-1)*4;
-  assert.deepEqual([...pixels.subarray(left,left+4)],[...pixels.subarray(right,right+4)],`horizontal seam at row ${y}`);
-  if(y&&pixels[(y*width+100)*4]!==pixels[((y-1)*width+100)*4])differentRows++;
+const APPROVED={
+  path:'assets/game/ground/ground-tile.png',
+  blob:'61f205cba14534b6863106cc572255deb74a091b',
+  width:1024,
+  height:256,
+};
+
+function gitBlobSha(buffer){
+  const header=Buffer.from(`blob ${buffer.length}\0`);
+  return crypto.createHash('sha1').update(header).update(buffer).digest('hex');
 }
-for(let i=3;i<pixels.length;i+=4)if(pixels[i]===255)opaque++;
-assert.equal(opaque,width*height,'ground must be fully opaque');
-assert.ok(differentRows>150,'ground needs real vertical texture detail');
-console.log('PASS: one 1024x256 ground tile, exact matching horizontal edges, opaque texture.');
+
+const png=fs.readFileSync(APPROVED.path);
+assert.deepEqual([...png.subarray(0,8)],[137,80,78,71,13,10,26,10],'ground must remain a PNG');
+assert.equal(png.readUInt32BE(16),APPROVED.width);
+assert.equal(png.readUInt32BE(20),APPROVED.height);
+assert.equal(gitBlobSha(png),APPROVED.blob,'approved seamless ground tile changed unexpectedly');
+
+// Exact pixel seam behavior is covered in the browser continuity/flick gate.
+// Keeping this check byte-for-byte deterministic avoids relying on an ffmpeg
+// binary that is not guaranteed by the GitHub hosted runner image.
+console.log('PASS: approved 1024x256 seamless ground tile is byte-for-byte unchanged; browser gate validates continuity and flicker.');
