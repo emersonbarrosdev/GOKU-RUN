@@ -9,7 +9,7 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -27,18 +27,6 @@ jobs:
 
       - name: Use npm 11
         run: npm install --global npm@11.21.1
-
-      - name: Regenerate Linux lockfile
-        run: |
-          rm -rf node_modules package-lock.json
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-
-      - name: Upload Linux lockfile
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-package-lock
-          path: package-lock.json
-          retention-days: 1
 
       - name: Gate A - Logic and physics
         run: npm ci && npm test
@@ -85,17 +73,3 @@ jobs:
         env:
           TEST_URL: http://127.0.0.1:4173/
         run: npm run test:mobile
-
-      - name: Commit Linux lockfile
-        if: github.event_name == 'push'
-        shell: bash
-        run: |
-          if git diff --quiet -- package-lock.json; then
-            echo "package-lock.json already matches the Linux/npm 11 resolution"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git commit -m "fix: regenerate lockfile on Linux [skip ci]"
-          git push
