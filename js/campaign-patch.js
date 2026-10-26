@@ -53,14 +53,15 @@
     if (!next) return false;
 
     const previous = game.campaignStage;
-    const chapterChanged = !previous || previous.chapterNumber !== next.chapterNumber;
+    const enteringCampaign = transitionReason === 'campaign-start' || transitionReason === 'bonus-start';
+    const chapterChanged = enteringCampaign || !previous || previous.chapterNumber !== next.chapterNumber;
     game.previousPhase = Number.isFinite(game.phaseIndex) ? game.phaseIndex : next.environment;
     game.campaignStageIndex = index;
     game.campaignStage = next;
     game.phaseIndex = next.environment;
     game.phaseTime = 0;
     game.phaseBanner = 2.6;
-    game.phaseFade = previous && previous.environment === next.environment ? .22 : 1;
+    game.phaseFade = chapterChanged ? 1 : (previous && previous.environment === next.environment ? .22 : 1);
     game.campaignBossCycle = -1;
     game.campaignBossShotKeys = new Set();
     clearStageObjects(game);
