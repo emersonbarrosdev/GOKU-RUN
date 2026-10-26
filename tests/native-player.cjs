@@ -19,18 +19,26 @@ const fs=require('node:fs');
       // Isolate movement from enemies; still the actual runner scene and controls.
       g.encounterTimer=g.orbTimer=10000;
       g.track.segments=[{start:-1000,end:100000}];
-      const frames=new Set(),samples=[],loops=[];let maxEcho=0,maxAngle=0;
-      const onLoop=()=>loops.push(performance.now());
+      const frames=new Set(),samples=[],wraps=[],repeatEvents=[];let maxEcho=0,maxAngle=0,lastFrame=null;
+      const onLoop=()=>repeatEvents.push(performance.now());
       s.hero.on('animationrepeat',onLoop);
-      const onUpdate=()=>{frames.add(+s.hero.frame.name);samples.push({foot:p.foot,frame:+s.hero.frame.name});
-        maxEcho=Math.max(maxEcho,s.nativePlayer.echo.alpha);maxAngle=Math.max(maxAngle,Math.abs(s.hero.angle));};
+      const onUpdate=()=>{
+        const frame=+s.hero.frame.name;
+        frames.add(frame);samples.push({foot:p.foot,frame});
+        // Phaser 4.2.x no longer gives this integration test a reliable
+        // animationrepeat signal on every cycle. Measure the visual contract
+        // directly: a real loop is the rendered sequence wrapping 9 -> 0.
+        if(lastFrame!==null&&lastFrame>=8&&frame<=1)wraps.push(performance.now());
+        lastFrame=frame;
+        maxEcho=Math.max(maxEcho,s.nativePlayer.echo.alpha);maxAngle=Math.max(maxAngle,Math.abs(s.hero.angle));
+      };
       s.events.on('postupdate',onUpdate);
       await new Promise(r=>setTimeout(r,2200));s.events.off('postupdate',onUpdate);s.hero.off('animationrepeat',onLoop);
       const a=s.anims.get('goku-run');
       return {frames:[...frames].sort((a,b)=>a-b),fps:a.frameRate,repeat:a.repeat,
         count:a.frames.length,durations:a.frames.map(f=>f.duration||a.msPerFrame),texture:s.hero.texture.key,size:[s.hero.frame.width,s.hero.frame.height],
         body:[s.hero.body.width,s.hero.body.height],scale:s.hero.scaleX,rate:s.hero.anims.timeScale,maxEcho,maxAngle,
-        loopMs:loops.slice(1).map((t,i)=>t-loops[i]),x:p.x,feet:samples.map(x=>x.foot),
+        loopMs:wraps.slice(1).map((t,i)=>t-wraps[i]),wrapCount:wraps.length,repeatEvents:repeatEvents.length,x:p.x,feet:samples.map(x=>x.foot),
         instances:document.querySelectorAll('#game-container canvas').length,
         logical:[phaser.scale.width,phaser.scale.height],legacyHero:s.textures.exists('hero'),
         ground:{type:s.nativePlayer.floorViews[0]?.type,texture:s.nativePlayer.floorViews[0]?.texture.key,
@@ -46,7 +54,7 @@ const fs=require('node:fs');
     assert.equal(result.instances,1);assert.equal(result.x,280);
     assert.equal(result.scale,.65);assert.equal(result.rate,.62);
     assert.ok(Math.abs(result.body[0]-41.6)<.01&&Math.abs(result.body[1]-93.6)<.01);
-    assert.ok(result.loopMs.length>=2&&result.loopMs.every(ms=>ms>500&&ms<600),`actual loop must take approximately 548ms: ${JSON.stringify(result.loopMs)}`);
+    assert.ok(result.loopMs.length>=2&&result.loopMs.every(ms=>ms>500&&ms<600),`rendered loop must take approximately 548ms: ${JSON.stringify({loopMs:result.loopMs,wrapCount:result.wrapCount,repeatEvents:result.repeatEvents})}`);
     assert.ok(result.maxEcho>.02&&result.maxEcho<=.141,'short previous-frame echo must soften swaps without ghosting');
     assert.ok(result.maxAngle>.1&&result.maxAngle<=.33,'sub-degree torso sway must remain subtle');
     assert.ok(result.feet.every(y=>Math.abs(y-560)<.01),'Arcade foot baseline must not drift');
