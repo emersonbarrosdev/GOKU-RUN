@@ -9,7 +9,7 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -27,25 +27,6 @@ jobs:
 
       - name: Use npm 11
         run: npm install --global npm@11.21.1
-
-      - name: Regenerate cross-platform lockfile
-        run: |
-          rm -rf node_modules package-lock.json
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-
-      - name: Commit regenerated lockfile
-        if: github.event_name == 'push'
-        shell: bash
-        run: |
-          if git diff --quiet -- package-lock.json; then
-            echo "package-lock.json already stable"
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add package-lock.json
-            git commit -m "fix: stabilize npm lockfile across platforms"
-            git push
-          fi
 
       - name: Gate A - Logic and physics
         run: npm ci && npm test
@@ -92,3 +73,34 @@ jobs:
         env:
           TEST_URL: http://127.0.0.1:4173/
         run: npm run test:mobile
+
+  lockfile-windows:
+    name: Windows lockfile stability
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.22.1
+          cache: npm
+
+      - name: Use npm 11
+        run: npm install --global npm@11.21.1
+
+      - name: First Windows npm install
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Verify lockfile after first install
+        shell: pwsh
+        run: git diff --exit-code -- package-lock.json
+
+      - name: Repeat Windows npm install with node_modules present
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Verify lockfile remains unchanged
+        shell: pwsh
+        run: git diff --exit-code -- package-lock.json
