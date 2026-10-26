@@ -21,6 +21,22 @@ export async function bootGame(uiBridge) {
   let stopCampaign = () => {};
   let destroyed = false;
 
+  // Phaser 4.2.1 não expõe mais Phaser.GAMES. O runtime visual legado ainda
+  // usa essa ponte apenas durante a descoberta inicial da Scene, então
+  // fornecemos a instância recém-criada e aguardamos a instalação completa
+  // antes de liberar o menu para impedir corrida entre JOGAR e o loading.
+  if (campaignModule) {
+    const { default: Phaser } = await import('phaser');
+    const previousGames = Phaser.GAMES;
+    Phaser.GAMES = [runner.game];
+    try {
+      stopCampaign = await campaignModule.bootCampaignRuntime();
+    } finally {
+      if (previousGames === undefined) delete Phaser.GAMES;
+      else Phaser.GAMES = previousGames;
+    }
+  }
+
   activeRuntime = {
     start: () => runner.start(),
     pause: () => runner.pause(),
@@ -37,9 +53,6 @@ export async function bootGame(uiBridge) {
 
   storyModule?.bootStoryRuntime()
     .then(cleanup => { if (destroyed) cleanup(); else stopStory = cleanup; })
-    .catch(error => console.error(error));
-  campaignModule?.bootCampaignRuntime()
-    .then(cleanup => { if (destroyed) cleanup(); else stopCampaign = cleanup; })
     .catch(error => console.error(error));
 
   return activeRuntime;
