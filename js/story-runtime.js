@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-const STORY_SEEN_KEY = 'goku-run-campaign-intro-seen-v1';
+const STORY_SEEN_KEY = 'goku-run-campaign-intro-seen-v2';
 const params = new URLSearchParams(location.search);
 const qaMode = params.get('debug') === '1' || params.get('autostart') === '1';
 
@@ -8,18 +8,27 @@ let storyUnlocked = qaMode;
 const STORY = [
   {
     kicker: 'CAPÍTULO 1 · SAGA DOS SAIYAJINS',
-    title: 'Raditz abre a nova campanha',
-    text: 'Goku vai atravessar quatro grandes sagas em 15 fases. Cada fase termina com um vilão próprio, começando por Raditz, Nappa e Vegeta.',
+    title: 'Raditz chega à Terra',
+    text: 'A campanha começa nas montanhas. Raditz é a primeira ameaça: observe as investidas, pule os obstáculos e sobreviva até o confronto terminar.',
+    visual: './assets/game/story/story-raditz.png',
+    visualAlt: 'Raditz em posição de combate',
+    badge: 'AMEAÇA · RADITZ',
   },
   {
-    kicker: 'CHEFES EM MOVIMENTO',
-    title: 'Cada vilão muda o jeito de sobreviver',
-    text: 'Alguns chefes avançam pelo chão, outros voam, mergulham, disparam energia ou usam sequências de ataques. As rochas, buracos e obstáculos ficam mais frequentes conforme a campanha avança.',
+    kicker: 'LEIA O PADRÃO DO CHEFE',
+    title: 'Cada batalha exige uma reação diferente',
+    text: 'Investidas pedem salto no tempo certo. Rajadas exigem leitura de altura. Rochas e buracos pressionam o percurso enquanto o chefe muda o ritmo do combate.',
+    visual: './assets/game/story/story-combat.png',
+    visualAlt: 'Ícones de investida, rajada de energia e rocha',
+    badge: 'MOVIMENTO · KI · OBSTÁCULOS',
   },
   {
     kicker: 'BÔNUS · OUTRO MUNDO',
-    title: 'O torneio só abre depois da batalha final',
-    text: 'Derrote Kid Boo para desbloquear o Torneio do Outro Mundo. Depois disso, Caterpy, Maraikoh e Paikuhan ficam disponíveis como três fases bônus.',
+    title: 'O torneio abre depois de Kid Boo',
+    text: 'Conclua as quatro sagas e derrote Kid Boo para liberar o Torneio do Outro Mundo com Caterpy, Maraikoh e Paikuhan.',
+    visual: './assets/game/story/story-tournament.png',
+    visualAlt: 'Emblema do Torneio do Outro Mundo',
+    badge: 'DESBLOQUEIO · PÓS-CAMPANHA',
   },
 ];
 
@@ -74,16 +83,14 @@ function waitForMenuReady() {
   });
 }
 
-function animateGifPreview(node) {
-  if (!node) return () => {};
-  const image = new Image();
-  image.alt = 'Goku correndo';
-  image.width = 160;
-  image.height = 160;
-  image.style.objectFit = 'contain';
-  image.src = './assets/game/player/goku-running-source.gif';
-  node.replaceChildren(image);
-  return () => node.replaceChildren();
+function renderStoryVisual(item) {
+  const image = $('story-visual-image');
+  const badge = $('story-visual-badge');
+  if (image) {
+    image.src = item.visual;
+    image.alt = item.visualAlt;
+  }
+  if (badge) badge.textContent = item.badge;
 }
 
 function restoreMenu(panel) {
@@ -127,7 +134,6 @@ function showStory() {
   overlay.dataset.mode = 'intro';
   if (skip) skip.hidden = false;
   let page = 0;
-  let stopPreview = () => {};
 
   const render = () => {
     const item = STORY[page];
@@ -136,10 +142,10 @@ function showStory() {
     text.textContent = item.text;
     progress.textContent = `${page + 1} / ${STORY.length}`;
     next.textContent = page === STORY.length - 1 ? 'IR PARA O MENU' : 'CONTINUAR';
+    renderStoryVisual(item);
   };
 
   const finishStory = () => {
-    stopPreview();
     next.onclick = null;
     if (skip) skip.onclick = null;
     overlay.hidden = true;
@@ -157,7 +163,6 @@ function showStory() {
   if (skip) skip.onclick = finishStory;
 
   render();
-  stopPreview = animateGifPreview($('story-runner-preview'));
 }
 
 export async function bootStoryRuntime() {

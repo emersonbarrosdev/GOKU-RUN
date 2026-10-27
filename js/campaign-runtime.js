@@ -7,9 +7,10 @@ const $ = id => document.getElementById(id);
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 const lerp = (a, b, t) => a + (b - a) * clamp(t, 0, 1);
 const ATTACK_CYCLE = 6;
+const RADITZ_TEXTURE = 'boss-raditz';
+const RADITZ_SHEET = './assets/game/bosses/raditz-spritesheet.png';
 
 const BOSS_STYLE = {
-  raditz:{skin:0xd8a270,hair:0x16141a,body:0x4b3526,accent:0x91a946,scale:1.04,hairMode:'long'},
   nappa:{skin:0xd4a071,hair:0x2b241f,body:0x24262d,accent:0xc6a83b,scale:1.14,hairMode:'bald'},
   vegeta:{skin:0xd5a074,hair:0x11131a,body:0x183c8e,accent:0xf2e7d2,scale:.98,hairMode:'spike'},
   recoome:{skin:0xd5a074,hair:0xb44532,body:0x2f2c37,accent:0xf4ead6,scale:1.12,hairMode:'crest'},
@@ -41,14 +42,29 @@ function waitForScene() {
   });
 }
 
+function loadCampaignBossAssets(scene) {
+  if (scene.textures.exists(RADITZ_TEXTURE)) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const onComplete = () => {
+      scene.load.off('loaderror', onError);
+      resolve();
+    };
+    const onError = file => {
+      if (file?.key !== RADITZ_TEXTURE) return;
+      scene.load.off('complete', onComplete);
+      reject(new Error(`Não foi possível carregar ${RADITZ_SHEET}`));
+    };
+    scene.load.once('complete', onComplete);
+    scene.load.on('loaderror', onError);
+    scene.load.spritesheet(RADITZ_TEXTURE, RADITZ_SHEET, { frameWidth: 256, frameHeight: 256 });
+    scene.load.start();
+  });
+}
+
 function drawHair(g, style) {
   g.fillStyle(style.hair, 1);
   switch (style.hairMode) {
     case 'bald': break;
-    case 'long':
-      g.fillTriangle(-30,-150,-52,-105,-22,-115).fillTriangle(30,-150,52,-105,22,-115);
-      g.fillTriangle(-20,-160,-38,-110,-8,-120).fillTriangle(20,-160,38,-110,8,-120);
-      break;
     case 'horns':
       g.fillTriangle(-25,-157,-45,-185,-10,-166).fillTriangle(25,-157,45,-185,10,-166);
       break;
@@ -85,30 +101,55 @@ function drawFighter(scene, style, label, offsetX = 0, alpha = 1) {
   g.lineStyle(3,0x22232a,.8).lineBetween(-11,-145,-4,-145).lineBetween(4,-145,11,-145);
   g.fillStyle(style.accent, .9).fillCircle(-8,-146,2.4).fillCircle(8,-146,2.4);
   drawHair(g, style);
-  if (style.hairMode === 'illusion') {
-    g.lineStyle(3,0xaad5ff,.7).strokeCircle(0,-145,34);
-  }
-  const name = scene.add.text(0,-219,label,{fontFamily:'Arial Black, Arial',fontSize:'13px',color:'#ffffff',stroke:'#161a22',strokeThickness:4}).setOrigin(.5);
+  if (style.hairMode === 'illusion') g.lineStyle(3,0xaad5ff,.7).strokeCircle(0,-145,34);
+  const name = scene.add.text(0,-219,label,{
+    fontFamily:'Arial Black, Arial',fontSize:'13px',color:'#ffffff',stroke:'#161a22',strokeThickness:4
+  }).setOrigin(.5);
   root.add([aura,g,name]);
   root.setScale(style.scale || 1);
   return root;
 }
 
+function createRaditzActor(scene, stage) {
+  const container = scene.add.container(0, 0).setVisible(false).setName('campaign-boss-raditz');
+  const sprite = scene.add.sprite(0, 8, RADITZ_TEXTURE, 0)
+    .setOrigin(.5, 1)
+    .setScale(.78)
+    .setName('raditz-sprite');
+  const name = scene.add.text(0,-207,stage.boss,{
+    fontFamily:'Arial Black, Arial',
+    fontSize:'13px',
+    color:'#fff7e5',
+    stroke:'#161a22',
+    strokeThickness:4,
+  }).setOrigin(.5);
+  container.add([sprite,name]);
+  container.setData('sprite', sprite);
+  container.setData('rasterBoss', true);
+  return container;
+}
+
 function createBossActor(scene, stage) {
-  const container = scene.add.container(0, 0).setVisible(false);
-  const style = BOSS_STYLE[stage.id] || BOSS_STYLE.vegeta;
-  if (stage.id === 'burter-jeice') {
-    const left = drawFighter(scene, {...style,skin:0x4d78ba,hair:0xf1f1ef,accent:0xc2d0f1}, 'BURTER', -37, 1);
-    const right = drawFighter(scene, {...style,skin:0xb95852,hair:0xf1e4db,accent:0xf0c06d}, 'JEICE', 37, 1);
-    left.setScale(.83);right.setScale(.83);container.add([left,right]);
-  } else if (stage.id === 'buu-illusions') {
-    const a = drawFighter(scene, {...style,skin:0xd1b085,hair:0x1b1b20,body:0x65418d}, 'GOHAN', -52, .9);
-    const b = drawFighter(scene, {...style,skin:0xd1b085,hair:0x191a20,body:0x244b8f}, 'GOTENKS', 0, .9);
-    const c = drawFighter(scene, {...style,skin:0x68a86a,hair:0x233726,body:0x5b4a85}, 'PICCOLO', 52, .9);
-    a.setScale(.70);b.setScale(.70);c.setScale(.70);container.add([a,b,c]);
+  let container;
+  if (stage.id === 'raditz') {
+    container = createRaditzActor(scene, stage);
   } else {
-    container.add(drawFighter(scene, style, stage.boss));
+    container = scene.add.container(0, 0).setVisible(false);
+    const style = BOSS_STYLE[stage.id] || BOSS_STYLE.vegeta;
+    if (stage.id === 'burter-jeice') {
+      const left = drawFighter(scene, {...style,skin:0x4d78ba,hair:0xf1f1ef,accent:0xc2d0f1}, 'BURTER', -37, 1);
+      const right = drawFighter(scene, {...style,skin:0xb95852,hair:0xf1e4db,accent:0xf0c06d}, 'JEICE', 37, 1);
+      left.setScale(.83);right.setScale(.83);container.add([left,right]);
+    } else if (stage.id === 'buu-illusions') {
+      const a = drawFighter(scene, {...style,skin:0xd1b085,hair:0x1b1b20,body:0x65418d}, 'GOHAN', -52, .9);
+      const b = drawFighter(scene, {...style,skin:0xd1b085,hair:0x191a20,body:0x244b8f}, 'GOTENKS', 0, .9);
+      const c = drawFighter(scene, {...style,skin:0x68a86a,hair:0x233726,body:0x5b4a85}, 'PICCOLO', 52, .9);
+      a.setScale(.70);b.setScale(.70);c.setScale(.70);container.add([a,b,c]);
+    } else {
+      container.add(drawFighter(scene, style, stage.boss));
+    }
   }
+
   scene.world.add(container);
   scene.world.bringToTop(container);
   scene.world.bringToTop(scene.hero);
@@ -248,8 +289,6 @@ function installGroundSnap(scene) {
       const drawX = Math.round(chunk.worldX - track.distance);
       const drawWidth = Math.max(1, Math.round(chunk.width));
       floor.setVisible(true).setPosition(drawX, native.ground).setSize(drawWidth, GROUND_ART.visibleHeight);
-      // Fixed 256 px chunks + a world-anchored texture phase keep every middle
-      // tile on integer coordinates. The source remains the approved seamless tile.
       floor.tilePositionX = Math.round(chunk.worldX) % GROUND_ART.width;
       floor.tilePositionY = 0;
       floor.setTint(tint);
@@ -263,6 +302,7 @@ function installGroundSnap(scene) {
   };
   scene.cameras.main.setRoundPixels(true);
 }
+
 function renderGroundCaps(scene, graphics) {
   const g = scene.model, tint = g.campaignStage?.groundTint || 0xffffff;
   graphics.clear();
@@ -297,9 +337,23 @@ function bossDamage(g, cycle, bossBox) {
   }
 }
 
+function setRaditzFrame(actor, attack, local) {
+  const sprite = actor?.getData?.('sprite');
+  if (!sprite) return;
+  let frame = Math.floor(local * 5) % 2;
+  if (attack === 'charge') frame = 2 + (Math.floor(local * 8) % 2);
+  else if (attack === 'fly-dive') frame = 6;
+  else if (attack === 'blast') frame = local < 2 ? 4 : 5;
+  else if (attack === 'rocks') frame = 4;
+  sprite.setFrame(frame);
+}
+
 function renderBoss(scene, actor) {
   const g = scene.model, stage = g.campaignStage;
-  if (!stage || g.state !== 'playing') { actor.setVisible(false); return; }
+  if (!stage || !actor || g.state !== 'playing') {
+    actor?.setVisible(false);
+    return;
+  }
   actor.setVisible(true).setAlpha(1).setAngle(0);
   const cycle = Math.floor(g.phaseTime / ATTACK_CYCLE);
   const local = g.phaseTime - cycle * ATTACK_CYCLE;
@@ -333,6 +387,11 @@ function renderBoss(scene, actor) {
     if(local>2.05)fireOnce(g,`${cycle}:d1`,()=>g.enemies.push(new C.Enemy('blast',1050,C.GROUND-155)));
   }
 
+  if (stage.id === 'raditz') {
+    width = 86;
+    height = 174;
+    setRaditzFrame(actor, attack, local);
+  }
   if (local > 4.7) actor.setAlpha(clamp((ATTACK_CYCLE-local)/1.3,0,1));
   actor.setPosition(Math.round(x),Math.round(foot));
   if (stage.id === 'fat-buu') { width=100;height=150; }
@@ -340,22 +399,38 @@ function renderBoss(scene, actor) {
   if (dangerous) bossDamage(g, cycle, {x:x-width/2,y:foot-height,w:width,h:height});
 }
 
+function stageVisual(stage) {
+  if (stage.id === 'raditz') {
+    return {
+      src:'./assets/game/story/story-raditz.png',
+      alt:'Raditz em posição de combate',
+      badge:'CHEFE · RADITZ',
+    };
+  }
+  return {
+    src:'./assets/game/story/story-combat.png',
+    alt:`Indicador de combate contra ${stage.boss}`,
+    badge:`CHEFE · ${stage.boss}`,
+  };
+}
+
 function showTransition(scene, transition) {
   const overlay=$('story-overlay'), kicker=$('story-kicker'), title=$('story-title'), text=$('story-text');
-  const next=$('story-next'), skip=$('story-skip'), progress=$('story-progress'), preview=$('story-runner-preview');
+  const next=$('story-next'), skip=$('story-skip'), progress=$('story-progress');
+  const visual=$('story-visual-image'), badge=$('story-visual-badge');
   if (!overlay || !kicker || !title || !text || !next || !progress) {
     scene.model.state='playing';return () => {};
   }
   const stage=transition.stage;
+  const art=stageVisual(stage);
   overlay.hidden=false;overlay.dataset.mode='campaign';
   kicker.textContent=`CAPÍTULO ${stage.chapterNumber} · ${stage.chapterTitle}`;
   title.textContent=`FASE ${stage.stage}/${stage.stageCountInChapter} · ${stage.boss}`;
   text.textContent=`${stage.location} — ${stage.description}`;
   progress.textContent=transition.chapterChanged?'CARREGANDO NOVO CENÁRIO E CHÃO…':'CARREGANDO FASE…';next.textContent='INICIAR FASE';
   if(skip)skip.hidden=true;
-  if(preview){
-    const img=document.createElement('img');img.alt='Goku correndo';img.width=160;img.height=160;img.style.objectFit='contain';img.src='./assets/game/player/goku-running-source.gif';preview.replaceChildren(img);
-  }
+  if(visual){visual.src=art.src;visual.alt=art.alt;}
+  if(badge)badge.textContent=art.badge;
   let closed=false;
   const close=()=>{
     if(closed)return;closed=true;clearTimeout(timer);next.onclick=null;overlay.hidden=true;overlay.dataset.mode='';if(skip)skip.hidden=false;
@@ -369,6 +444,7 @@ function showTransition(scene, transition) {
 export async function bootCampaignRuntime() {
   if (!C || !Campaign) return () => {};
   const scene = await waitForScene();
+  await loadCampaignBossAssets(scene);
   installUiRewrite(scene);installGroundSnap(scene);
   const bonusButton = ensureBonusButton(scene);
   const decor = createDecor(scene);

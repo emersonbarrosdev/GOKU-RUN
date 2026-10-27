@@ -104,7 +104,7 @@ class RunnerScene extends Phaser.Scene {
       else if(key==='k')g.activateKi();else if(key==='p')g.state==='playing'?this.pauseRun():this.resumeRun();else if(key==='m')this.toggleSound();
     });
   }
-  startRun(){if(this.isPortrait())return;this.sound.context?.resume();this.model.start();this.accumulator=0;this.lastState='';}
+  startRun(){if(this.isPortrait())return;this.model.start();this.accumulator=0;this.lastState='';}
   pauseRun(){if(this.model?.state==='playing'){this.model.state='paused';this.nativePlayer?.sprite.anims.pause();this.music.pause();this.sound.pauseAll();}}
   resumeRun(){if(this.model.state!=='paused'||this.isPortrait())return;this.model.state='playing';this.sound.resumeAll();if(this.model.audio.enabled)this.music.resume();this.accumulator=0;}
   toggleSound(){this.model.audio.toggle();}
@@ -148,7 +148,6 @@ class RunnerScene extends Phaser.Scene {
       }
     }
 
-    // O player ativo usa apenas o relógio de animação nativo do Phaser.
     this.nativePlayer.render(playing);
 
     const alive=this.aliveViews;alive.clear();
@@ -208,7 +207,7 @@ export function createRunnerGame(uiBridge={render(){}}){
     render:{antialias:true,roundPixels:false,powerPreference:'high-performance'},
     fps:{target:60,min:30,forceSetTimeOut:false,smoothStep:true},
     scale:{mode:Phaser.Scale.FIT,autoCenter:Phaser.Scale.CENTER_BOTH},
-    input:{activePointers:2},audio:{disableWebAudio:false},scene});
+    input:{activePointers:2},audio:{disableWebAudio:true},scene});
   const stageObserver=new ResizeObserver(()=>game.scale.refresh());
   stageObserver.observe($('stage'));
   const pauseOnPageHide=()=>game.scene.getScene('runner')?.pauseRun();
