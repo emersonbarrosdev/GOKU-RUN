@@ -1,0 +1,106 @@
+name: Apply Raditz raster fix
+
+on:
+  push:
+    branches:
+      - fix/raditz-correct-sprite
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, '[raditz-runtime-applied]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fix branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/raditz-correct-sprite
+          fetch-depth: 0
+
+      - name: Apply deterministic Raditz corrections
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path, old, new, count=1):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              actual = text.count(old)
+              if actual != count:
+                  raise SystemExit(f'{path}: expected {count} occurrence(s), found {actual}: {old!r}')
+              p.write_text(text.replace(old, new), encoding='utf-8')
+
+          replace_exact(
+              'js/campaign-runtime.js',
+              "const RADITZ_SHEET = './assets/game/bosses/raditz-spritesheet.png';",
+              "const RADITZ_SHEET = './assets/game/bosses/raditz-spritesheet.webp';",
+          )
+          replace_exact(
+              'js/campaign-runtime.js',
+              "scene.load.spritesheet(RADITZ_TEXTURE, RADITZ_SHEET, { frameWidth: 256, frameHeight: 256 });",
+              "scene.load.spritesheet(RADITZ_TEXTURE, RADITZ_SHEET, { frameWidth: 128, frameHeight: 128 });",
+          )
+          replace_exact(
+              'js/campaign-runtime.js',
+              ".setScale(.78)",
+              ".setScale(1.42)",
+          )
+          replace_exact(
+              'js/campaign-runtime.js',
+              "'./assets/game/story/story-raditz.png'",
+              "'./assets/game/story/story-raditz.webp'",
+          )
+          replace_exact(
+              'js/story-runtime.js',
+              "'./assets/game/story/story-raditz.png'",
+              "'./assets/game/story/story-raditz.webp'",
+          )
+
+          campaign_test = Path('tests/campaign.test.cjs')
+          text = campaign_test.read_text(encoding='utf-8')
+          old = """  const spritePath = path.join(__dirname, '..', 'assets', 'game', 'bosses', 'raditz-spritesheet.png');\n  const png = fs.readFileSync(spritePath);\n  assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'Raditz asset must be PNG');\n  assert.equal(png.readUInt32BE(16), 1024, 'Raditz sheet width');\n  assert.equal(png.readUInt32BE(20), 512, 'Raditz sheet height');\n\n  const runtime = fs.readFileSync(path.join(__dirname, '..', 'js', 'campaign-runtime.js'), 'utf8');\n"""
+          new = """  const spritePath = path.join(__dirname, '..', 'assets', 'game', 'bosses', 'raditz-spritesheet.webp');\n  const webp = fs.readFileSync(spritePath);\n  assert.equal(webp.subarray(0, 4).toString('ascii'), 'RIFF', 'Raditz asset must be WebP/RIFF');\n  assert.equal(webp.subarray(8, 12).toString('ascii'), 'WEBP', 'Raditz asset must be WebP');\n\n  const runtime = fs.readFileSync(path.join(__dirname, '..', 'js', 'campaign-runtime.js'), 'utf8');\n"""
+          if text.count(old) != 1:
+              raise SystemExit('tests/campaign.test.cjs: PNG assertion block not found exactly once')
+          text = text.replace(old, new)
+          marker = "  assert.match(runtime, /scene\\.add\\.sprite\\(0,\\s*8,\\s*RADITZ_TEXTURE/);\n"
+          addition = marker + "  assert.match(runtime, /frameWidth:\\s*128,\\s*frameHeight:\\s*128/);\n  assert.match(runtime, /\\.setScale\\(1\\.42\\)/);\n"
+          if text.count(marker) != 1:
+              raise SystemExit('tests/campaign.test.cjs: runtime sprite assertion marker not found')
+          campaign_test.write_text(text.replace(marker, addition), encoding='utf-8')
+
+          story_test = Path('tests/story-smoke.cjs')
+          text = story_test.read_text(encoding='utf-8').replace('story-raditz.png', 'story-raditz.webp')
+          marker = "    assert.ok((await visualImage.getAttribute('src'))?.includes('story-raditz.webp'));\n"
+          asset_check = marker + """\n    const raditzAsset = await page.evaluate(async () => {\n      const image = new Image();\n      image.src = './assets/game/bosses/raditz-spritesheet.webp';\n      await image.decode();\n      const canvas = document.createElement('canvas');\n      canvas.width = 128;\n      canvas.height = 128;\n      const context = canvas.getContext('2d', { willReadFrequently: true });\n      context.clearRect(0, 0, 128, 128);\n      context.drawImage(image, 0, 0, 128, 128, 0, 0, 128, 128);\n      const pixels = context.getImageData(0, 0, 128, 128).data;\n      let transparent = 0;\n      let opaqueBlack = 0;\n      for (let i = 0; i < pixels.length; i += 4) {\n        const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2], a = pixels[i + 3];\n        if (a < 24) transparent += 1;\n        if (a > 240 && r < 10 && g < 10 && b < 10) opaqueBlack += 1;\n      }\n      const total = pixels.length / 4;\n      return {\n        width: image.naturalWidth,\n        height: image.naturalHeight,\n        transparentRatio: transparent / total,\n        opaqueBlackRatio: opaqueBlack / total,\n      };\n    });\n    assert.equal(raditzAsset.width, 512, 'spritesheet Raditz width');\n    assert.equal(raditzAsset.height, 256, 'spritesheet Raditz height');\n    assert.ok(raditzAsset.transparentRatio > .25, 'cada frame precisa preservar fundo transparente');\n    assert.ok(raditzAsset.opaqueBlackRatio < .20, 'o frame não pode voltar a ser um retângulo preto opaco');\n"""
+          if text.count(marker) < 1:
+              raise SystemExit('tests/story-smoke.cjs: Raditz visual assertion marker not found')
+          text = text.replace(marker, asset_check, 1)
+          story_test.write_text(text, encoding='utf-8')
+
+          docs = Path('docs/SPRITESHEETS.md')
+          text = docs.read_text(encoding='utf-8')
+          text = text.replace(
+              '[raditz-spritesheet.png](../assets/game/bosses/raditz-spritesheet.png) | Raditz: oito frames raster, grid 4 × 2, células 256 × 256; idle, investida, disparo e mergulho',
+              '[raditz-spritesheet.webp](../assets/game/bosses/raditz-spritesheet.webp) | Raditz: oito frames raster transparentes, grid 4 × 2, células 128 × 128; idle, investida, disparo e mergulho',
+          )
+          text = text.replace(
+              '[story-raditz.png](../assets/game/story/story-raditz.png) | Retrato do Raditz usado na introdução e loading da fase',
+              '[story-raditz.webp](../assets/game/story/story-raditz.webp) | Retrato raster transparente do Raditz usado na introdução e loading da fase',
+          )
+          text = text.replace('carrega `raditz-spritesheet.png`', 'carrega `raditz-spritesheet.webp`')
+          docs.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit generated runtime changes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add js/campaign-runtime.js js/story-runtime.js tests/campaign.test.cjs tests/story-smoke.cjs docs/SPRITESHEETS.md
+          git diff --cached --check
+          git commit -m "fix: wire transparent Raditz sprites [raditz-runtime-applied]"
+          git push origin HEAD:fix/raditz-correct-sprite
