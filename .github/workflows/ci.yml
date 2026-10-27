@@ -106,7 +106,7 @@ jobs:
         run: git diff --exit-code -- package-lock.json
 
   cloudflare-compatibility:
-    name: Cloudflare npm 10 compatibility
+    name: Cloudflare compatibility
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -123,7 +123,7 @@ jobs:
         run: npm install --global npm@10.9.2
 
       - name: Cloudflare clean install
-        run: npm ci --no-audit --no-fund
+        run: npm ci
 
       - name: Cloudflare production build
         run: npm run build
