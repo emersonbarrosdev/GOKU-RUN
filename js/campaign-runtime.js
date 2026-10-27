@@ -8,7 +8,7 @@ const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 const lerp = (a, b, t) => a + (b - a) * clamp(t, 0, 1);
 const ATTACK_CYCLE = 6;
 const RADITZ_TEXTURE = 'boss-raditz';
-const RADITZ_SHEET = './assets/game/bosses/raditz-spritesheet.png';
+const RADITZ_SHEET = './assets/game/bosses/raditz-spritesheet.webp';
 
 const BOSS_STYLE = {
   nappa:{skin:0xd4a071,hair:0x2b241f,body:0x24262d,accent:0xc6a83b,scale:1.14,hairMode:'bald'},
@@ -56,7 +56,7 @@ function loadCampaignBossAssets(scene) {
     };
     scene.load.once('complete', onComplete);
     scene.load.on('loaderror', onError);
-    scene.load.spritesheet(RADITZ_TEXTURE, RADITZ_SHEET, { frameWidth: 256, frameHeight: 256 });
+    scene.load.spritesheet(RADITZ_TEXTURE, RADITZ_SHEET, { frameWidth: 64, frameHeight: 64 });
     scene.load.start();
   });
 }
@@ -114,7 +114,7 @@ function createRaditzActor(scene, stage) {
   const container = scene.add.container(0, 0).setVisible(false).setName('campaign-boss-raditz');
   const sprite = scene.add.sprite(0, 8, RADITZ_TEXTURE, 0)
     .setOrigin(.5, 1)
-    .setScale(.78)
+    .setScale(2.65)
     .setName('raditz-sprite');
   const name = scene.add.text(0,-207,stage.boss,{
     fontFamily:'Arial Black, Arial',
@@ -402,7 +402,7 @@ function renderBoss(scene, actor) {
 function stageVisual(stage) {
   if (stage.id === 'raditz') {
     return {
-      src:'./assets/game/story/story-raditz.png',
+      src:'./assets/game/story/story-raditz.webp',
       alt:'Raditz em posição de combate',
       badge:'CHEFE · RADITZ',
     };

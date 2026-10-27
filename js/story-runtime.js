@@ -10,7 +10,7 @@ const STORY = [
     kicker: 'CAPÍTULO 1 · SAGA DOS SAIYAJINS',
     title: 'Raditz chega à Terra',
     text: 'A campanha começa nas montanhas. Raditz é a primeira ameaça: observe as investidas, pule os obstáculos e sobreviva até o confronto terminar.',
-    visual: './assets/game/story/story-raditz.png',
+    visual: './assets/game/story/story-raditz.webp',
     visualAlt: 'Raditz em posição de combate',
     badge: 'AMEAÇA · RADITZ',
   },
