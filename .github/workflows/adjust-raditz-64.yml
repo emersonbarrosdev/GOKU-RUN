@@ -1,0 +1,78 @@
+name: Align Raditz compact sheet
+
+on:
+  push:
+    branches:
+      - fix/raditz-correct-sprite
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, '[raditz-64-applied]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/raditz-correct-sprite
+          fetch-depth: 0
+
+      - name: Align runtime and regression tests
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def exact(path, old, new, count=1):
+              p=Path(path); text=p.read_text(encoding='utf-8')
+              found=text.count(old)
+              if found != count:
+                  raise SystemExit(f'{path}: expected {count}, found {found}: {old!r}')
+              p.write_text(text.replace(old,new),encoding='utf-8')
+
+          exact('js/campaign-runtime.js',
+                '{ frameWidth: 128, frameHeight: 128 }',
+                '{ frameWidth: 64, frameHeight: 64 }')
+          exact('js/campaign-runtime.js', '.setScale(1.42)', '.setScale(2.65)')
+
+          exact('tests/campaign.test.cjs',
+                r'/frameWidth:\s*128,\s*frameHeight:\s*128/',
+                r'/frameWidth:\s*64,\s*frameHeight:\s*64/')
+          exact('tests/campaign.test.cjs',
+                r'/\.setScale\(1\.42\)/',
+                r'/\.setScale\(2\.65\)/')
+
+          p=Path('tests/story-smoke.cjs'); text=p.read_text(encoding='utf-8')
+          replacements={
+              'canvas.width = 128;':'canvas.width = 64;',
+              'canvas.height = 128;':'canvas.height = 64;',
+              'context.clearRect(0, 0, 128, 128);':'context.clearRect(0, 0, 64, 64);',
+              'context.drawImage(image, 0, 0, 128, 128, 0, 0, 128, 128);':'context.drawImage(image, 0, 0, 64, 64, 0, 0, 64, 64);',
+              'context.getImageData(0, 0, 128, 128).data':'context.getImageData(0, 0, 64, 64).data',
+              "assert.equal(raditzAsset.width, 512, 'spritesheet Raditz width');":"assert.equal(raditzAsset.width, 256, 'spritesheet Raditz width');",
+              "assert.equal(raditzAsset.height, 256, 'spritesheet Raditz height');":"assert.equal(raditzAsset.height, 128, 'spritesheet Raditz height');",
+          }
+          for old,new in replacements.items():
+              if text.count(old)!=1:
+                  raise SystemExit(f'tests/story-smoke.cjs expected once: {old}')
+              text=text.replace(old,new)
+          p.write_text(text,encoding='utf-8')
+
+          p=Path('docs/SPRITESHEETS.md'); text=p.read_text(encoding='utf-8')
+          old='células 128 × 128; idle, investida, disparo e mergulho'
+          new='células 64 × 64; idle, investida, disparo e mergulho'
+          if text.count(old)!=1:
+              raise SystemExit('docs sprite dimension marker not found')
+          p.write_text(text.replace(old,new),encoding='utf-8')
+          PY
+
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add js/campaign-runtime.js tests/campaign.test.cjs tests/story-smoke.cjs docs/SPRITESHEETS.md
+          git diff --cached --check
+          git commit -m "fix: align Raditz frames with valid compact sheet [raditz-64-applied]"
+          git push origin HEAD:fix/raditz-correct-sprite
