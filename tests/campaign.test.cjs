@@ -55,7 +55,7 @@ test('Raditz gameplay uses a real raster spritesheet instead of the procedural f
   const runtime = fs.readFileSync(path.join(__dirname, '..', 'js', 'campaign-runtime.js'), 'utf8');
   assert.match(runtime, /RADITZ_TEXTURE\s*=\s*'boss-raditz'/);
   assert.match(runtime, /scene\.add\.sprite\(0,\s*8,\s*RADITZ_TEXTURE/);
-  assert.match(runtime, /frameWidth:\s*128,\s*frameHeight:\s*128/);
-  assert.match(runtime, /\.setScale\(1\.42\)/);
+  assert.match(runtime, /frameWidth:\s*64,\s*frameHeight:\s*64/);
+  assert.match(runtime, /\.setScale\(2\.65\)/);
   assert.doesNotMatch(runtime, /\braditz:\{skin:/, 'Raditz must not use the generic procedural BOSS_STYLE');
 });

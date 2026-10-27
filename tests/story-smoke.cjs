@@ -32,12 +32,12 @@ const assert = require('node:assert/strict');
       image.src = './assets/game/bosses/raditz-spritesheet.webp';
       await image.decode();
       const canvas = document.createElement('canvas');
-      canvas.width = 128;
-      canvas.height = 128;
+      canvas.width = 64;
+      canvas.height = 64;
       const context = canvas.getContext('2d', { willReadFrequently: true });
-      context.clearRect(0, 0, 128, 128);
-      context.drawImage(image, 0, 0, 128, 128, 0, 0, 128, 128);
-      const pixels = context.getImageData(0, 0, 128, 128).data;
+      context.clearRect(0, 0, 64, 64);
+      context.drawImage(image, 0, 0, 64, 64, 0, 0, 64, 64);
+      const pixels = context.getImageData(0, 0, 64, 64).data;
       let transparent = 0;
       let opaqueBlack = 0;
       for (let i = 0; i < pixels.length; i += 4) {
@@ -53,8 +53,8 @@ const assert = require('node:assert/strict');
         opaqueBlackRatio: opaqueBlack / total,
       };
     });
-    assert.equal(raditzAsset.width, 512, 'spritesheet Raditz width');
-    assert.equal(raditzAsset.height, 256, 'spritesheet Raditz height');
+    assert.equal(raditzAsset.width, 256, 'spritesheet Raditz width');
+    assert.equal(raditzAsset.height, 128, 'spritesheet Raditz height');
     assert.ok(raditzAsset.transparentRatio > .25, 'cada frame precisa preservar fundo transparente');
     assert.ok(raditzAsset.opaqueBlackRatio < .20, 'o frame não pode voltar a ser um retângulo preto opaco');
     assert.equal(await page.locator('.story-fruit').count(), 0, 'a fruta antiga não pode existir na introdução');

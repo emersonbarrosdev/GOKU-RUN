@@ -56,7 +56,7 @@ function loadCampaignBossAssets(scene) {
     };
     scene.load.once('complete', onComplete);
     scene.load.on('loaderror', onError);
-    scene.load.spritesheet(RADITZ_TEXTURE, RADITZ_SHEET, { frameWidth: 128, frameHeight: 128 });
+    scene.load.spritesheet(RADITZ_TEXTURE, RADITZ_SHEET, { frameWidth: 64, frameHeight: 64 });
     scene.load.start();
   });
 }
@@ -114,7 +114,7 @@ function createRaditzActor(scene, stage) {
   const container = scene.add.container(0, 0).setVisible(false).setName('campaign-boss-raditz');
   const sprite = scene.add.sprite(0, 8, RADITZ_TEXTURE, 0)
     .setOrigin(.5, 1)
-    .setScale(1.42)
+    .setScale(2.65)
     .setName('raditz-sprite');
   const name = scene.add.text(0,-207,stage.boss,{
     fontFamily:'Arial Black, Arial',

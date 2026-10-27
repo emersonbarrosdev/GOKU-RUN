@@ -5,7 +5,7 @@
 | [goku-run.png](../assets/game/player/goku-run.png) | Goku: dez frames, grid 5 × 2, células 256 × 256 |
 | [goku-running-source.gif](../assets/game/player/goku-running-source.gif) | Fonte visual preservada do Goku |
 | [ground-tile.png](../assets/game/ground/ground-tile.png) | Chão definitivo único, 1024 × 256, repetição horizontal |
-| [raditz-spritesheet.webp](../assets/game/bosses/raditz-spritesheet.webp) | Raditz: oito frames raster transparentes, grid 4 × 2, células 128 × 128; idle, investida, disparo e mergulho |
+| [raditz-spritesheet.webp](../assets/game/bosses/raditz-spritesheet.webp) | Raditz: oito frames raster transparentes, grid 4 × 2, células 64 × 64; idle, investida, disparo e mergulho |
 | [story-raditz.webp](../assets/game/story/story-raditz.webp) | Retrato raster transparente do Raditz usado na introdução e loading da fase |
 | [story-combat.png](../assets/game/story/story-combat.png) | Emblema de padrões de combate |
 | [story-tournament.png](../assets/game/story/story-tournament.png) | Emblema do Torneio do Outro Mundo |
