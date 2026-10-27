@@ -47,14 +47,15 @@ test('Kid Boo is the story finale and bonus never uses lava environment index 4'
 });
 
 test('Raditz gameplay uses a real raster spritesheet instead of the procedural fighter vector', () => {
-  const spritePath = path.join(__dirname, '..', 'assets', 'game', 'bosses', 'raditz-spritesheet.png');
-  const png = fs.readFileSync(spritePath);
-  assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'Raditz asset must be PNG');
-  assert.equal(png.readUInt32BE(16), 1024, 'Raditz sheet width');
-  assert.equal(png.readUInt32BE(20), 512, 'Raditz sheet height');
+  const spritePath = path.join(__dirname, '..', 'assets', 'game', 'bosses', 'raditz-spritesheet.webp');
+  const webp = fs.readFileSync(spritePath);
+  assert.equal(webp.subarray(0, 4).toString('ascii'), 'RIFF', 'Raditz asset must be WebP/RIFF');
+  assert.equal(webp.subarray(8, 12).toString('ascii'), 'WEBP', 'Raditz asset must be WebP');
 
   const runtime = fs.readFileSync(path.join(__dirname, '..', 'js', 'campaign-runtime.js'), 'utf8');
   assert.match(runtime, /RADITZ_TEXTURE\s*=\s*'boss-raditz'/);
   assert.match(runtime, /scene\.add\.sprite\(0,\s*8,\s*RADITZ_TEXTURE/);
+  assert.match(runtime, /frameWidth:\s*128,\s*frameHeight:\s*128/);
+  assert.match(runtime, /\.setScale\(1\.42\)/);
   assert.doesNotMatch(runtime, /\braditz:\{skin:/, 'Raditz must not use the generic procedural BOSS_STYLE');
 });

@@ -25,7 +25,38 @@ const assert = require('node:assert/strict');
 
     const visualImage = page.locator('#story-visual-image');
     await visualImage.waitFor({ state: 'visible', timeout: 5000 });
-    assert.ok((await visualImage.getAttribute('src'))?.includes('story-raditz.png'));
+    assert.ok((await visualImage.getAttribute('src'))?.includes('story-raditz.webp'));
+
+    const raditzAsset = await page.evaluate(async () => {
+      const image = new Image();
+      image.src = './assets/game/bosses/raditz-spritesheet.webp';
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = 128;
+      canvas.height = 128;
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      context.clearRect(0, 0, 128, 128);
+      context.drawImage(image, 0, 0, 128, 128, 0, 0, 128, 128);
+      const pixels = context.getImageData(0, 0, 128, 128).data;
+      let transparent = 0;
+      let opaqueBlack = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2], a = pixels[i + 3];
+        if (a < 24) transparent += 1;
+        if (a > 240 && r < 10 && g < 10 && b < 10) opaqueBlack += 1;
+      }
+      const total = pixels.length / 4;
+      return {
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+        transparentRatio: transparent / total,
+        opaqueBlackRatio: opaqueBlack / total,
+      };
+    });
+    assert.equal(raditzAsset.width, 512, 'spritesheet Raditz width');
+    assert.equal(raditzAsset.height, 256, 'spritesheet Raditz height');
+    assert.ok(raditzAsset.transparentRatio > .25, 'cada frame precisa preservar fundo transparente');
+    assert.ok(raditzAsset.opaqueBlackRatio < .20, 'o frame não pode voltar a ser um retângulo preto opaco');
     assert.equal(await page.locator('.story-fruit').count(), 0, 'a fruta antiga não pode existir na introdução');
 
     const panelVisibility = await page.locator('#panel').evaluate(el => getComputedStyle(el).visibility);
@@ -56,7 +87,7 @@ const assert = require('node:assert/strict');
     await expectText(page, '#story-kicker', 'SAGA DOS SAIYAJINS');
     await expectText(page, '#story-title', 'RADITZ');
     await expectText(page, '#story-progress', 'NOVO CENÁRIO E CHÃO');
-    assert.ok((await visualImage.getAttribute('src'))?.includes('story-raditz.png'),
+    assert.ok((await visualImage.getAttribute('src'))?.includes('story-raditz.webp'),
       'o loading inicial deve mostrar o chefe da fase, não o Goku correndo');
     await story.waitFor({ state: 'hidden', timeout: 5000 });
     await page.locator('#hud').waitFor({ state: 'visible', timeout: 5000 });
