@@ -17,17 +17,15 @@
   <div id="phase-banner" [hidden]="ui().bannerHidden">{{ui().banner}}</div>
   <section id="story-overlay" hidden aria-label="História de introdução">
     <article class="story-card">
-      <div class="story-visual" aria-hidden="true"><div class="story-runner-frame"><div id="story-runner-preview"></div></div><div class="story-fruit"></div></div>
+      <div class="story-visual" aria-hidden="true">
+        <div class="story-visual-frame">
+          <img id="story-visual-image" src="./assets/game/story/story-raditz.png" alt="">
+        </div>
+        <span id="story-visual-badge" class="story-visual-badge"></span>
+      </div>
       <div><small id="story-kicker" class="story-kicker"></small><h2 id="story-title"></h2><p id="story-text"></p>
         <div class="story-actions"><button id="story-next" type="button">CONTINUAR</button><button id="story-skip" type="button">PULAR HISTÓRIA</button><span id="story-progress">1 / 3</span></div>
       </div>
-    </article>
-  </section>
-  <section id="ending-overlay" hidden aria-label="Final da história">
-    <div id="ending-loading" class="ending-loading-box" hidden><div class="ending-spinner" aria-hidden="true"></div><strong>CARREGANDO A VERDADE…</strong><small>Tem alguma coisa estranha nessa energia.</small></div>
-    <article id="ending-dialogue" class="ending-dialogue" hidden><span class="ending-speaker">VEGETA</span>
-      <blockquote>“Kakarotto… você realmente acreditou que aquele fruto era proibido? Bulma só preparou um bloqueador de ki que durava um dia. A energia que você seguiu era nossa. Era o único jeito de fazer você chegar à festa sem voar e estragar a surpresa. Feliz aniversário, Kakarotto!”</blockquote>
-      <p>Os poderes de Goku voltaram. E, desta vez, ninguém deixou ele escolher o tamanho do bolo.</p><footer><button id="ending-replay" type="button">CORRER DE NOVO</button></footer>
     </article>
   </section>
   <aside id="rotate-notice"><span>↻</span><strong>Vire o celular</strong><p>A aventura fica melhor com a tela deitada.</p></aside>

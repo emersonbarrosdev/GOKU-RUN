@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const Campaign = require('../js/campaign-config.js');
 
 const mainBosses = [
@@ -42,4 +44,17 @@ test('Kid Boo is the story finale and bonus never uses lava environment index 4'
   assert.equal(finale.boss, 'KID BOO');
   assert.equal(finale.environment, 4);
   assert.ok(Campaign.bonusStages.every(s => s.environment !== 4));
+});
+
+test('Raditz gameplay uses a real raster spritesheet instead of the procedural fighter vector', () => {
+  const spritePath = path.join(__dirname, '..', 'assets', 'game', 'bosses', 'raditz-spritesheet.png');
+  const png = fs.readFileSync(spritePath);
+  assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', 'Raditz asset must be PNG');
+  assert.equal(png.readUInt32BE(16), 1024, 'Raditz sheet width');
+  assert.equal(png.readUInt32BE(20), 512, 'Raditz sheet height');
+
+  const runtime = fs.readFileSync(path.join(__dirname, '..', 'js', 'campaign-runtime.js'), 'utf8');
+  assert.match(runtime, /RADITZ_TEXTURE\s*=\s*'boss-raditz'/);
+  assert.match(runtime, /scene\.add\.sprite\(0,\s*8,\s*RADITZ_TEXTURE/);
+  assert.doesNotMatch(runtime, /\braditz:\{skin:/, 'Raditz must not use the generic procedural BOSS_STYLE');
 });
